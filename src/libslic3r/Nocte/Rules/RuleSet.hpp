@@ -5,7 +5,12 @@
 // writes recommendations into a sink. Keeping rules data rather than code is what lets the report
 // cite a rule id and the GUI remember a user's accept/reject per rule.
 //
-// Header-only in M0. The table itself is Rules/rules_v1.cpp (M1).
+// The table itself is Rules/rules_v1.cpp; this header carries only the shapes it is written in.
+//
+// A rule's emit() writes candidate recommendations; it is tune() that validates the key against
+// print_config_def, fills previous_value, resolves conflicts by priority and applies the
+// user-override invariant. A rule may emit a note without any recommendation when it has a finding
+// to report but no legal key at object or region scope to act on it.
 
 #ifndef slic3r_Nocte_Rules_RuleSet_hpp_
 #define slic3r_Nocte_Rules_RuleSet_hpp_
@@ -51,16 +56,13 @@ struct Rule
     std::function<void(const PartFeatures &, const DynamicPrintConfig &, RuleSink &)>  emit;
 };
 
-// TODO(M1): populate in Rules/rules_v1.cpp. Empty until then, so tune() has a well-defined result.
-inline const std::vector<Rule> &rule_set_v1()
-{
-    static const std::vector<Rule> rules;
-    return rules;
-}
+// The v1 table, defined in Rules/rules_v1.cpp. The returned reference is to a function-local static
+// built on first use and never mutated afterwards, so it is safe to read from several threads.
+const std::vector<Rule> &rule_set_v1();
 
 inline std::string rule_set_version()
 {
-    return "nocte.rules/0";
+    return "nocte.rules/1";
 }
 
 } // namespace Nocte

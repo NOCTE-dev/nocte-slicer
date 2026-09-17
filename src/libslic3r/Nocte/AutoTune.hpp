@@ -62,8 +62,15 @@ struct TuneResult
     std::string                 rules_version;
 };
 
-// TODO(M1): run the rule table. Returns an empty TuneResult carrying a single note for now, so the
-// report and the dialog can be written against the final shape of the result.
+// Runs the rule table against the measured features. `base` is the config at the scope the
+// recommendations target, and it is read two ways: as the context a rule matches on, and as the
+// record of what the user already set there — a key present in `base` is a user override, because
+// Orca's per-object and per-volume configs hold only the keys overridden at that scope.
+//
+// Every recommendation a rule emits is checked against print_config_def before it is accepted: an
+// unknown key, or a value string that does not deserialize for that option, is dropped with a note.
+// Recommendations that would not change anything are skipped, and when two rules target the same
+// key in the same scope the higher-priority rule wins.
 TuneResult tune(const PartFeatures &features, const DynamicPrintConfig &base, const TuneProfile &profile);
 
 // True once tune() actually evaluates rules.
