@@ -324,7 +324,9 @@ std::vector<ShellOrientation> its_shell_orientations(const indexed_triangle_set 
     const std::vector<MeshEdge> edges = its_mesh_edges(its);
 
     // ------------------------------------------------- edge-connected components, by union-find
-    std::vector<int> parent(size_t(face_count));
+    // static_cast rather than size_t(face_count): with the functional cast the whole statement
+    // parses as the declaration of a function named parent (-Wvexing-parse).
+    std::vector<int> parent(static_cast<size_t>(face_count));
     std::iota(parent.begin(), parent.end(), 0);
     auto root_of = [&parent](int x) {
         while (parent[size_t(x)] != x) {
