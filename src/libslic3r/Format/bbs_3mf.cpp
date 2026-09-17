@@ -14,6 +14,10 @@
 #include "../I18N.hpp"
 
 #include "bbs_3mf.hpp"
+// NOCTE-BEGIN nocte-3mf-identity
+#include "../Nocte/NocteVersion.hpp"
+#include "../Nocte/ProjectReport.hpp"
+// NOCTE-END
 
 #include <limits>
 #include <stdexcept>
@@ -6568,6 +6572,22 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
             return false;
         }
 
+        // NOCTE-BEGIN nocte-3mf-identity
+        // Additive NOCTE project report. Everything about it is non-essential: it is an extra
+        // archive entry no other reader knows about (ADR-001), so a failure to write it is logged
+        // and the export continues - losing a project because an informational file could not be
+        // compressed would be the worse outcome. Omitted for a minimal published 3MF along with
+        // the slicer tags, since it names the generator.
+        if (!m_minimal_published && Nocte::project_report_enabled()) {
+            const std::string nocte_report = Nocte::project_report_json(model);
+            if (!nocte_report.empty() &&
+                !mz_zip_writer_add_mem(&archive, NOCTE_PROJECT_REPORT_FILE, (const void*)nocte_report.data(), nocte_report.length(), MZ_DEFAULT_COMPRESSION)) {
+                BOOST_LOG_TRIVIAL(warning) << __FUNCTION__ << ":" << __LINE__
+                                           << boost::format(", store %1% to 3mf, length %2%, failed; continuing without it\n") % NOCTE_PROJECT_REPORT_FILE % nocte_report.length();
+            }
+        }
+        // NOCTE-END
+
         //BBS progress point
         BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ":" <<__LINE__ << boost::format(", before add auxiliary dir to 3mf\n");
         if (proFn) {
@@ -6969,8 +6989,22 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
                     metadata_item_map.erase(ORCASLICER_TAG);
                     metadata_item_map.erase(BBS_3MF_VERSION);
                     metadata_item_map.erase(BBS_3MF_VERSION1);
+                    // NOCTE-BEGIN nocte-3mf-identity
+                    // The NOCTE tag is a slicer-identifying tag like the ones above: a project
+                    // opened from a NOCTE 3MF carries it in metadata_items, so erase it too or a
+                    // published file would stay identifiable.
+                    metadata_item_map.erase(NOCTE_3MF_METADATA_TAG);
+                    // NOCTE-END
                 } else {
                     metadata_item_map[BBL_APPLICATION_TAG] = (boost::format("%1%-%2%") % "BambuStudio" % SLIC3R_VERSION).str();
+                    // NOCTE-BEGIN nocte-3mf-identity
+                    // NOCTE identity, additive on top of the unchanged BambuStudio-<ver>
+                    // Application tag (ADR-001): Bambu Studio ignores metadata names it does not
+                    // know, so this never costs native mode. Assigning into the map rather than
+                    // emitting a second element below is what keeps the tag unique when the map
+                    // was seeded from a file that already carried it.
+                    metadata_item_map[NOCTE_3MF_METADATA_TAG] = NOCTE_VERSION;
+                    // NOCTE-END
                 }
             }
             // The Bambu 3MF version marker is part of the slicer identity: omit it for a minimal

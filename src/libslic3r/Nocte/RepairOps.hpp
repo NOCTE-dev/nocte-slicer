@@ -42,8 +42,12 @@ struct RepairOpParams
     // RemoveTinyShells: a shell with at most this many facets is tiny regardless of its volume.
     // Zero disables the facet criterion.
     int    tiny_shell_max_faces       = 0;
-    // FillHolesCgal (M1): holes longer than this are left alone. Zero means no limit.
+    // FillHolesCgal: holes longer than this are left alone. Zero means no limit.
     double hole_max_perimeter         = 0.;
+    // FillHolesCgal: holes bounded by more edges than this are left alone. The cost of CGAL's
+    // triangulate_hole() grows non-linearly with the cycle length, so this caps the worst case per
+    // hole; 500 is the bound TextureToColor/Repair.hpp:30 settled on for the same reason.
+    size_t hole_max_edges             = 500;
     // VoxelRemesh (M3): zero means min(bbox) / 512.
     double voxel_size                 = 0.;
 };
@@ -69,7 +73,8 @@ struct MeshMetrics
     int    tris              = 0;
     int    open_edges        = 0;
     int    shells            = 0;
-    // -1 when not measured. Counting self-intersections needs CGAL, which M0 does not call.
+    // -1 when not measured — the test is CGAL work and is skipped above a facet budget. Otherwise
+    // 0 for none and 1 for "at least one": only the yes/no predicate is asked, never the count.
     int    self_intersections = -1;
     double volume            = 0.;
     double surface_area      = 0.;

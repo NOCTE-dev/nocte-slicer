@@ -52,6 +52,10 @@ add_executable(${_TEST_NAME}_tests
 # NOCTE-BEGIN nocte-engine
     test_nocte_mesh_diagnostics.cpp
     test_nocte_mesh_repair.cpp
+    test_nocte_3mf.cpp
+    test_nocte_bbl_compat.cpp
+    test_nocte_geometry_analysis.cpp
+    test_nocte_autotune.cpp
 # NOCTE-END
     ../libnest2d/printer_parts.cpp
     )

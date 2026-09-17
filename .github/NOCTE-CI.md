@@ -183,8 +183,11 @@ Other upstream-only things that are *harmless* here and were left alone:
   falls through to the GitHub-hosted runner. Do **not** set that variable.
 - `secrets: inherit` on the reusable-workflow calls is fine — it inherits an
   empty set.
-- `.github/dependabot.yml` is upstream's. GitHub disables Dependabot on forks by
-  default; leave it that way unless you want action-version PRs.
+- `.github/dependabot.yml` is upstream's minus the `docker` ecosystem. This
+  repository was created by pushing (it is not a GitHub "fork"), so Dependabot is
+  active and opens monthly major-version PRs for GitHub Actions. The `docker`
+  entry was dropped because there is no Dockerfile at the root and every run
+  failed with "No Dockerfiles nor Kubernetes YAML found in /".
 
 ---
 

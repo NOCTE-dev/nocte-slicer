@@ -10,9 +10,7 @@ updates:
         update-types: ["version-update:semver-patch", "version-update:semver-minor"]
       - dependency-name: "actions/*"
         update-types: ["version-update:semver-patch", "version-update:semver-minor"]
-  # Docker dependencies
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "monthly"
+  # NOCTE: upstream's "docker" ecosystem entry is dropped on the fork. There is no
+  # Dockerfile at the repository root, so every run failed with
+  # "No Dockerfiles nor Kubernetes YAML found in /".
   # no support for c/cpp

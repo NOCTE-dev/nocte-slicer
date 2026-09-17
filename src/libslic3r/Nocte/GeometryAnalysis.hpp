@@ -40,7 +40,8 @@ struct PartFeatures
     double              overhang_area_fraction  = 0.;
     double              steep_overhang_area     = 0.;
 
-    // Wall-thickness histogram, uniform bins over [0, max thickness].
+    // Wall-thickness histogram: thickness_bins counts over a fixed 0..10 mm range, so that two
+    // parts produce comparable histograms. Samples at or above 10 mm land in the last bin.
     std::vector<double> thickness_hist;
     double              min_wall_thickness      = 0.;
     double              p05_wall_thickness      = 0.;
@@ -56,7 +57,10 @@ struct AnalysisParams
 {
     // Slice spacing for the bridge-span and cross-section measurements (mm).
     double slice_step          = 0.2;
-    // Facets steeper than this count towards the overhang measures (degrees from horizontal).
+    // Overhang angle above which a facet counts towards the overhang measures, in degrees from the
+    // vertical: 0 = a vertical wall, 90 = a horizontal ceiling. This is the complement of Orca's
+    // `support_threshold_angle`, which is a slope angle measured from horizontal:
+    //   support_threshold_angle = 90 - overhang_threshold.
     double overhang_threshold  = 45.;
     // Number of bins in thickness_hist.
     int    thickness_bins      = 32;
@@ -64,10 +68,15 @@ struct AnalysisParams
     int    max_thickness_samples = 20000;
 };
 
-// TODO(M1): implement. Overhangs and curvature come from the facet normals, thickness from an SDF
-// probe (OpenVDBUtils), hull_volume from TriangleMesh::convex_hull_3d, bridge spans and minimum
-// cross section from slice_mesh() + Clipper2. Returns a zero-initialised PartFeatures for now, so
-// callers and the report can already be written and tested against the final shape of the struct.
+// Measures `its`, which is expected in object coordinates with Z up and millimetre units.
+//
+// v1 derives the overhang and footprint measures from the facet normals, the volume, hull and
+// topology counts from the its_* helpers in TriangleMesh.hpp, the wall thickness from inward ray
+// casts against an AABBMesh, and the minimum cross section from slice_mesh_ex(). An empty or
+// degenerate mesh yields a zeroed PartFeatures rather than an error.
+//
+// Still zero in v1, measured in M2: max_bridge_span, smallest_feature_size, mean_abs_curvature.
+// The rule table does not read them, so a zero there is never mistaken for a finding.
 PartFeatures analyze(const indexed_triangle_set &its, const AnalysisParams &params, const DynamicPrintConfig &ctx);
 
 // True once analyze() actually measures something. Lets the GUI and the report say "not analysed"

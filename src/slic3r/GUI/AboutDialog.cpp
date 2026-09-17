@@ -15,6 +15,18 @@
 namespace Slic3r {
 namespace GUI {
 
+// NOCTE-BEGIN nocte-branding
+// Display strings for the About dialog. SLIC3R_APP_FULL_NAME and GCODEVIEWER_APP_NAME live in
+// libslic3r.h, which is not on the fork's upstream touch-point allowlist, so the dialog carries
+// its own names. Non-ASCII is written as explicit UTF-8 byte escapes rather than as a literal
+// "Ø", because MSVC decodes source files with the system code page unless /utf-8 is passed. Each
+// escape ends the string literal before the next character: "\x" consumes every hex digit that
+// follows it, so "\xC3\x98CTE" would be read as "\xC3" "\x98C" "TE".
+// Lower-case names on purpose: NOCTE_APP_DISPLAY_NAME is a macro in libslic3r/Nocte/NocteVersion.hpp.
+static const char *s_nocte_about_app_name     = "N\xC3\x98" "CTE Slicer";
+static const char *s_nocte_about_gcodeviewer  = "N\xC3\x98" "CTE Slicer G-code Viewer";
+// NOCTE-END
+
 AboutDialogLogo::AboutDialogLogo(wxWindow* parent)
     : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize)
 {
@@ -44,7 +56,9 @@ void AboutDialogLogo::onRepaint(wxEvent &event)
 // -----------------------------------------
 CopyrightsDialog::CopyrightsDialog()
     : DPIDialog(static_cast<wxWindow*>(wxGetApp().mainframe), wxID_ANY, from_u8((boost::format("%1% - %2%")
-        % (wxGetApp().is_editor() ? SLIC3R_APP_FULL_NAME : GCODEVIEWER_APP_NAME)
+        // NOCTE-BEGIN nocte-branding
+        % (wxGetApp().is_editor() ? s_nocte_about_app_name : s_nocte_about_gcodeviewer)
+        // NOCTE-END
         % _utf8(L("License Info"))).str()),
         wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
@@ -209,7 +223,9 @@ void CopyrightsDialog::onCloseDialog(wxEvent &)
 }
 
 AboutDialog::AboutDialog()
-    : DPIDialog(static_cast<wxWindow *>(wxGetApp().mainframe),wxID_ANY,from_u8((boost::format(_utf8(L("About %s"))) % (wxGetApp().is_editor() ? SLIC3R_APP_FULL_NAME : GCODEVIEWER_APP_NAME)).str()),wxDefaultPosition,
+    // NOCTE-BEGIN nocte-branding
+    : DPIDialog(static_cast<wxWindow *>(wxGetApp().mainframe),wxID_ANY,from_u8((boost::format(_utf8(L("About %s"))) % (wxGetApp().is_editor() ? s_nocte_about_app_name : s_nocte_about_gcodeviewer)).str()),wxDefaultPosition,
+    // NOCTE-END
         wxDefaultSize, /*wxCAPTION*/wxDEFAULT_DIALOG_STYLE)
 {
     SetFont(wxGetApp().normal_font());
@@ -267,6 +283,19 @@ AboutDialog::AboutDialog()
     text_sizer_horiz->Add( 0, 0, 0, wxLEFT, FromDIP(20));
 
     std::vector<wxString> text_list;
+    // NOCTE-BEGIN nocte-branding
+    // The fork's own identity, followed unchanged by the upstream credits below: naming
+    // OrcaSlicer, BambuStudio, PrusaSlicer and Slic3r is an AGPL obligation, not decoration.
+    // These lines are brand and trademark text, so they are deliberately not translated, which
+    // also means the per-character line breaking used for Chinese must skip them.
+    const size_t nocte_brand_lines = 2;
+    text_list.push_back(wxString::FromUTF8(
+        "N\xC3\x98" "CTE Slicer, by N\xC3\x98" "CTE Engineering \xE2\x80\x94 Building the Impossible."));
+    text_list.push_back(wxString::FromUTF8(
+        "N\xC3\x98" "CTE Slicer is based on OrcaSlicer and is released under the same licence, "
+        "the GNU Affero General Public License, version 3. N\xC3\x98" "CTE and the N\xC3\x98" "CTE logo "
+        "are trademarks of N\xC3\x98" "CTE Engineering; the AGPL licence does not grant trademark rights."));
+    // NOCTE-END
     text_list.push_back(_L("Open-source slicing stands on a tradition of collaboration and attribution. Slic3r, created by Alessandro Ranellucci and the RepRap community, laid the foundation. PrusaSlicer by Prusa Research built on that work, Bambu Studio forked from PrusaSlicer, and SuperSlicer extended it with community-driven enhancements. Each project carried the work of its predecessors forward, crediting those who came before."));
     text_list.push_back(_L("OrcaSlicer began in that same spirit, drawing from PrusaSlicer, BambuStudio, SuperSlicer, and CuraSlicer. But it has since grown far beyond its origins — introducing advanced calibration tools, precise wall and seam control and hundreds of other features."));
     text_list.push_back(_L("Today, OrcaSlicer is the most widely used and actively developed open-source slicer in the 3D printing community. Many of its innovations have been adopted by other slicers, making it a driving force for the entire industry."));
@@ -280,7 +309,9 @@ AboutDialog::AboutDialog()
         staticText->SetBackgroundColour(*wxWHITE);
         staticText->SetMinSize(wxSize(FromDIP(520), -1));
         staticText->SetFont(Label::Body_12);
-        if (is_zh) {
+        // NOCTE-BEGIN nocte-branding
+        if (is_zh && size_t(i) >= nocte_brand_lines) {
+        // NOCTE-END
             wxString find_txt = "";
             wxString count_txt = "";
             for (auto  o = 0; o < text_list[i].length(); o++) {
@@ -312,6 +343,15 @@ AboutDialog::AboutDialog()
 
     copyright_hor_sizer->Add(copyright_ver_sizer, 0, wxLEFT, FromDIP(20));
 
+    // NOCTE-BEGIN nocte-branding
+    // The fork's own notice. The upstream notice below it stays: it is a licence obligation.
+    wxStaticText *nocte_text = new wxStaticText(this, wxID_ANY,
+        wxString::FromUTF8("Copyright(C) 2026 N\xC3\x98" "CTE Engineering. All Rights Reserved"),
+        wxDefaultPosition, wxDefaultSize);
+    nocte_text->SetForegroundColour(wxColour(107, 107, 107));
+    copyright_ver_sizer->Add(nocte_text, 0, wxALL, 0);
+    // NOCTE-END
+
     wxStaticText *html_text = new wxStaticText(this, wxID_ANY, "Copyright(C) 2026 OrcaSlicer Pte Ltd All Rights Reserved", wxDefaultPosition, wxDefaultSize);
     html_text->SetForegroundColour(wxColour(107, 107, 107));
 
@@ -331,7 +371,10 @@ AboutDialog::AboutDialog()
               (boost::format(
               "<html>"
               "<body bgcolor= \"" + bgr_clr_str + "\" >"
-              "<p style=\"text-align:left\"><a style=\"color:#009789\" href=\"https://www.orcaslicer.com\">https://www.orcaslicer.com</ a></p>"
+              // NOCTE-BEGIN nocte-branding
+              // Same upstream link, without the teal accent: the NOCTE brand is monochrome.
+              "<p style=\"text-align:left\"><a style=\"color:#000000\" href=\"https://www.orcaslicer.com\">https://www.orcaslicer.com</ a></p>"
+              // NOCTE-END
               "</body>"
               "</html>")
             ).str());

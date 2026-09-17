@@ -1,9 +1,11 @@
 // NØCTE Slicer — Copyright (c) 2026 NØCTE Engineering. AGPL-3.0-or-later.
 
 #include "libslic3r/Nocte/MeshRepair.hpp"
+#include "libslic3r/Nocte/NocteCgal.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <iomanip>
 #include <sstream>
 #include <utility>
@@ -249,6 +251,28 @@ int remove_tiny_shells(indexed_triangle_set &its, const RepairOpParams &params, 
     return dropped;
 }
 
+// Flips every facet of the shells that its_shell_orientations() found to be inside out. A flip is
+// a swap of two vertex indices, so it moves nothing and is its own inverse.
+int flip_inverted_shells(indexed_triangle_set &its, std::vector<int> &flipped_faces)
+{
+    int shells_flipped = 0;
+    for (const ShellOrientation &shell : its_shell_orientations(its)) {
+        if (! shell.inverted)
+            continue;
+        ++ shells_flipped;
+        for (int f : shell.faces) {
+            std::swap(its.indices[size_t(f)](1), its.indices[size_t(f)](2));
+            flipped_faces.push_back(f);
+        }
+    }
+    return shells_flipped;
+}
+
+// compute_metrics() runs before and after every step, twice per preview and twice per accept, so
+// the CGAL self-intersection test only joins in on meshes where it is cheap. Above this the metric
+// stays at -1, "not measured". The diagnostics have a separate, larger budget of their own.
+constexpr size_t max_faces_for_metric_self_intersections = 50000;
+
 } // namespace
 
 MeshMetrics compute_metrics(const indexed_triangle_set &its)
@@ -264,7 +288,14 @@ MeshMetrics compute_metrics(const indexed_triangle_set &its)
         area += facet_area(its, f);
     metrics.surface_area = area;
 
-    // self_intersections stays at -1: counting them needs CGAL, which this target does not link.
+    // 0 means none, 1 means at least one: NocteCgal only asks CGAL the yes/no question, because
+    // PMP::self_intersections() has no call site in this tree to copy a calling convention from.
+    // -1 stays for "not measured", which is what an over-budget or failed test leaves behind.
+    if (! its.indices.empty() && its.indices.size() <= max_faces_for_metric_self_intersections) {
+        const cgal::SelfIntersectionResult probe = cgal::self_intersections(its);
+        if (probe.ok)
+            metrics.self_intersections = probe.intersects ? 1 : 0;
+    }
     return metrics;
 }
 
@@ -313,22 +344,29 @@ RepairPlan plan_from(const DiagnosticsResult &diagnostics, const RepairOpParams 
             "vertex, so the shape is unchanged.");
 
     if (diagnostics.has(IssueKind::InvertedShell))
-        add(RepairOpKind::FlipShell, 1, false, false, ids_of(IssueKind::InvertedShell),
-            "The shell is consistently oriented but inside out. Not implemented in M0.");
+        add(RepairOpKind::FlipShell, 1, false, true, ids_of(IssueKind::InvertedShell),
+            "The shell is consistently oriented but inside out. Flipping its facets swaps two vertex "
+            "indices per facet and moves nothing, so the shape is unchanged.");
 
-    if (diagnostics.has(IssueKind::NonManifoldEdge))
-        add(RepairOpKind::DuplicateNonManifoldVertices, 1, false, false, ids_of(IssueKind::NonManifoldEdge),
-            "Edges shared by more than two facets have to be split before the surface can be closed. "
-            "Needs CGAL PMP duplicate_non_manifold_vertices (M1).");
+    if (diagnostics.has(IssueKind::NonManifoldEdge) || diagnostics.has(IssueKind::NonManifoldVertex)) {
+        std::vector<std::string> targets = ids_of(IssueKind::NonManifoldEdge);
+        for (std::string &id : ids_of(IssueKind::NonManifoldVertex))
+            targets.push_back(std::move(id));
+        add(RepairOpKind::DuplicateNonManifoldVertices, 1, false, true, std::move(targets),
+            "Where the surface pinches together, one vertex has to become one vertex per facet fan "
+            "before anything else can close the mesh. CGAL PMP duplicate_non_manifold_vertices only "
+            "duplicates positions, so no geometry is lost.");
+    }
 
     if (diagnostics.has(IssueKind::OpenBoundaryLoop)) {
         const std::vector<std::string> loops = ids_of(IssueKind::OpenBoundaryLoop);
-        add(RepairOpKind::StitchBorders, 1, false, false, loops,
+        add(RepairOpKind::StitchBorders, 1, false, true, loops,
             "Borders that already match up geometrically can be sewn together without adding geometry. "
-            "Needs CGAL PMP stitch_borders (M1).");
-        add(RepairOpKind::FillHolesCgal, 1, false, false, loops,
-            "What is left after stitching is a genuine hole and has to be triangulated and faired. "
-            "Needs CGAL PMP triangulate_refine_and_fair_hole (M1).");
+            "CGAL PMP stitch_borders only closes a border where another one sits exactly on top of it.");
+        add(RepairOpKind::FillHolesCgal, 1, false, true, loops,
+            "What is left after stitching is a genuine hole and has to be triangulated. CGAL PMP "
+            "triangulate_hole adds facets but moves no existing vertex; holes past the size limit are "
+            "left for the tier-2 rebuild.");
     }
 
     if (diagnostics.has(IssueKind::DisconnectedShell))
@@ -419,9 +457,37 @@ RepairStepResult RepairSession::run(RepairOpKind kind, const RepairOpParams &par
         }
         break;
     }
+    case RepairOpKind::FlipShell: {
+        const int shells = flip_inverted_shells(mesh, result.touched_faces);
+        result.succeeded = true;
+        result.message   = shells > 0 ? "Turned " + std::to_string(shells) + " inside-out shell(s) the right way round, " +
+                                            std::to_string(result.touched_faces.size()) + " facet(s) in total."
+                                      : "No shell was inside out.";
+        break;
+    }
+    case RepairOpKind::StitchBorders: {
+        const cgal::StitchResult stitched = cgal::stitch_borders(mesh);
+        result.succeeded = stitched.ok;
+        result.message   = stitched.message;
+        break;
+    }
+    case RepairOpKind::DuplicateNonManifoldVertices: {
+        const cgal::DuplicateVerticesResult split = cgal::duplicate_non_manifold_vertices(mesh);
+        result.succeeded = split.ok;
+        result.message   = split.message;
+        break;
+    }
+    case RepairOpKind::FillHolesCgal: {
+        const cgal::FillHolesResult filled = cgal::fill_holes(mesh, params.hole_max_perimeter, params.hole_max_edges);
+        result.succeeded = filled.ok;
+        result.message   = filled.message;
+        break;
+    }
     default:
+        // NormalizeManifold needs the Manifold dependency (M2) and VoxelRemesh needs OpenVDBUtils
+        // (M3); the plan still offers them so the escalation path is visible.
         result.succeeded = false;
-        result.message   = std::string(op_title(kind)) + " (" + to_string(kind) + ") is not implemented in M0.";
+        result.message   = std::string(op_title(kind)) + " (" + to_string(kind) + ") is not implemented in this build.";
         break;
     }
 

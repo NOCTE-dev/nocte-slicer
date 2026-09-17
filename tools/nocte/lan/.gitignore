@@ -1,0 +1,5 @@
+# Raw MQTT captures and FTPS transcripts may contain serials, IPs, Wi-Fi names
+# and cloud tokens straight from the printer. They never enter the repository.
+_captures/
+*.raw.json
+*.jsonl
