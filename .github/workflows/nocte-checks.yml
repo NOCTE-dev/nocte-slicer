@@ -1,0 +1,95 @@
+# NOCTE-BEGIN ci
+# Fork-only guard rails. Nothing here exists upstream, so the whole file is one
+# NOCTE block. Two checks, both on a GitHub-hosted ubuntu runner, no secrets:
+#
+#   1. tools/nocte/check_touchpoints.py - audits how far the fork has drifted
+#      from upstream at the files NOCTE owns. Diffed against the merge base with
+#      upstream/main, falling back to the v2.4.2 tag the fork branched from.
+#   2. python -m compileall over tools/bbl-compat and tools/nocte - a syntax
+#      floor for the fork's Python tooling.
+#
+# Informational: it reports, it does not gate. Do NOT add it to the branch
+# protection required-checks list while M0 is in flight.
+name: NOCTE checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nocte_checks:
+    name: Touchpoints and Python syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Full history so a merge base with upstream can be computed;
+          # blob:none keeps that from pulling the whole object store.
+          fetch-depth: 0
+          filter: blob:none
+          lfs: 'false'
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Fetch upstream OrcaSlicer and resolve the comparison base
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote get-url upstream >/dev/null 2>&1 \
+            || git remote add upstream https://github.com/OrcaSlicer/OrcaSlicer.git
+          git remote set-url upstream https://github.com/OrcaSlicer/OrcaSlicer.git
+          git fetch --quiet --filter=blob:none --no-tags upstream \
+            +refs/heads/main:refs/remotes/upstream/main
+          # NOCTE-BASE: the upstream commit the fork was cut from (tag nocte-base-2026-09-16).
+          NOCTE_BASE_SHA=6b0e190e645952283f232d8660380a7cf1dd9628
+          base="$(git merge-base HEAD upstream/main 2>/dev/null || true)"
+          if [ -z "$base" ]; then
+            # No shared history with upstream/main (rewritten or squashed fork):
+            # fall back to the pinned base commit.
+            git fetch --quiet --filter=blob:none --no-tags upstream "$NOCTE_BASE_SHA" || true
+            base="$NOCTE_BASE_SHA"
+            echo "::notice::no merge base with upstream/main, using pinned base $NOCTE_BASE_SHA"
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "Comparing against $base - $(git log -1 --format='%h %s' "$base")"
+
+      - name: Check NOCTE touchpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f tools/nocte/check_touchpoints.py ]; then
+            echo "::warning::tools/nocte/check_touchpoints.py is not in the tree yet - skipped"
+            exit 0
+          fi
+          python tools/nocte/check_touchpoints.py --base "${{ steps.base.outputs.base }}"
+
+      - name: Byte-compile the fork's Python tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          dirs=()
+          for d in tools/bbl-compat tools/nocte; do
+            [ -d "$d" ] && dirs+=("$d")
+          done
+          if [ ${#dirs[@]} -eq 0 ]; then
+            echo "::warning::neither tools/bbl-compat nor tools/nocte exists yet - skipped"
+            exit 0
+          fi
+          python -m compileall "${dirs[@]}"
+# NOCTE-END

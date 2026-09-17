@@ -9,6 +9,11 @@ on:
 
 jobs:
   assign:
+    # NOCTE-BEGIN ci
+    # Upstream-only: assigns OrcaSlicer issues to OrcaSlicer maintainers. On the
+    # fork it would only burn a scheduled run every night.
+    if: github.repository == 'OrcaSlicer/OrcaSlicer'
+    # NOCTE-END
     permissions:
       issues: write
     runs-on: ubuntu-latest

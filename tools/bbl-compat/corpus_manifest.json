@@ -1,0 +1,405 @@
+{
+  "bambu_studio_version": "02.08.02.61",
+  "orca_base": "upstream/main@6b0e190e64 (nocte-base-2026-09-16)",
+  "generated": "2026-09-16T21:01:36",
+  "description": "Pinned inventory of the bbl-compat 3MF corpus. bambu_studio_version is the Bambu Studio build the corpus is authored and validated against; orca_base is the OrcaSlicer tag NOCTE Slicer forks from. Regenerate with the snippet in corpus/README.md after adding or replacing any file.",
+  "file_count": 24,
+  "files": [
+    {
+      "path": "fdmhub/_PERFIL_ADD1300.3mf",
+      "size": 13448,
+      "sha256": "684586257a744614cd95d4c5026ec46bd44422f7ed917c98fa1c30050ae4c954",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\perfiles\\_PERFIL_ADD1300.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 0,
+      "parts": 0,
+      "subtypes": {},
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 0,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/ADD-1281-Locker_ID_Tag_Rev.00_plate_1.gcode.3mf",
+      "size": 1807850,
+      "sha256": "9a9a9cb0974e124716838356946bb493eee0a210f8e06583dbcffd4124c2d5b6",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\datos\\gcode\\A4\\ADD-1281-Locker_ID_Tag_Rev.00_plate_1.gcode.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": true,
+      "objects": 0,
+      "parts": 0,
+      "subtypes": {},
+      "plater_ids": [
+        "1",
+        "2",
+        "3"
+      ],
+      "model_instances": 0,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P10_SOPORTE_HIBRIDO.stl",
+      "size": 72484,
+      "sha256": "efcf48faf3ee981a2f1cb0ca1664b0a579d96e221075214d01ac1066b103a9b3",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P10_SOPORTE_HIBRIDO.stl"
+    },
+    {
+      "path": "fdmhub/P10_SOPORTE_HIBRIDO_A1.3mf",
+      "size": 26856,
+      "sha256": "63c2002628310101be846f98a919503ca95d239dcb6fdfd6bbb66b4173ce144b",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P10_SOPORTE_HIBRIDO_A1.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 1,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P1_TORRE_PLA_A1.3mf",
+      "size": 106121,
+      "sha256": "bce2ebf716aaab26ca9d1e5cc412429f504c35f340e78f2de3fc1c745efd975f",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P1_TORRE_PLA_A1.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 1,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P1_TORRE_PLA_H2D.3mf",
+      "size": 108209,
+      "sha256": "2441a706b4d841ae5f36ef5b92f88b207c22772e45402518cbf562ae22817506",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P1_TORRE_PLA_H2D.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 1,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P2_HUMEDAD_PETG_w1_A1.3mf",
+      "size": 20513,
+      "sha256": "da5feb8ace498266e3134a3520bda3484cc7aba2cbadce78433e431aae18b653",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P2_HUMEDAD_PETG_w1_A1.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 1,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P3_RETRACCION_0p6.stl",
+      "size": 52284,
+      "sha256": "999dd3c0de1e2805c50840108994426d44758582c32b796c37724341d23719c9",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P3_RETRACCION_0p6.stl"
+    },
+    {
+      "path": "fdmhub/P3_RETRACCION_0p6_A1.3mf",
+      "size": 22429,
+      "sha256": "2b0da95083608652cf292ac668150e730a6a754a51201539949e0ad224857856",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P3_RETRACCION_0p6_A1.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 1,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P4_FLUJO_A1.3mf",
+      "size": 12514,
+      "sha256": "fd494f226fc74e524713cc0beaa187d44f2a442c80df654d770965f16b9bad8c",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P4_FLUJO_A1.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 1,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P4_FLUJO_A1.gcode.3mf",
+      "size": 63131,
+      "sha256": "11acfa8b3aa49df74fae09da2f75f8772d5363b47796849cf31564a3893682b7",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\datos\\gcode\\A4\\P4_FLUJO_A1.gcode.3mf",
+      "application": "BambuStudio-02.04.00.70",
+      "predicted_native": true,
+      "is_sliced": true,
+      "objects": 0,
+      "parts": 0,
+      "subtypes": {},
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 0,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P5_PRIMERA_CAPA.stl",
+      "size": 3084,
+      "sha256": "130a418f30d745337c2324c7ad1500a9885016c917f0889ed4fedac5041f282a",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P5_PRIMERA_CAPA.stl"
+    },
+    {
+      "path": "fdmhub/P5_PRIMERA_CAPA_H2D.3mf",
+      "size": 14986,
+      "sha256": "e5c7dc56808297cb92067dc1d8c6f3dc953fda15faef60df2a4c43e83b61ff70",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P5_PRIMERA_CAPA_H2D.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 1,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P6_FLUJO_PETG_1p00_A1.3mf",
+      "size": 12534,
+      "sha256": "292eeb75d549fdd8dcdd384b3ecc490b8f9960ac33fcdeba22b711744bb49b31",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P6_FLUJO_PETG_1p00_A1.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 1,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P7_SOPORTE_PLA_arbol_0p20_A1.3mf",
+      "size": 12652,
+      "sha256": "7ebb8c5b90081e627098992a4153393281d1558243265a2668406a7e094781d0",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P7_SOPORTE_PLA_arbol_0p20_A1.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 1,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P8_PLANCHA_70.stl",
+      "size": 684,
+      "sha256": "156966f0479ca9550fd3b9bdf5fa096b632c56d5976f1d98a5fd280266299627",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P8_PLANCHA_70.stl"
+    },
+    {
+      "path": "fdmhub/P8_PLANCHA_70_CRYOGRIP_PETG_A1.3mf",
+      "size": 12519,
+      "sha256": "34ff5d57da98a647aa3061453aba13a01536de30d203b56f7b32e91ea086b9f1",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\calibracion\\probetas\\P8_PLANCHA_70_CRYOGRIP_PETG_A1.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 1,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P9_BARRIDO_Z2_PETG_A1.gcode.3mf",
+      "size": 61727,
+      "sha256": "4ce530506356cd6923a134a21ae3e93a131031c17cc4c07dfc2e842a6d0e4c14",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\datos\\gcode\\A4\\P9_BARRIDO_Z2_PETG_A1.gcode.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": true,
+      "objects": 0,
+      "parts": 0,
+      "subtypes": {},
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 0,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P9_BARRIDO_Z3_PETG_A1.gcode.3mf",
+      "size": 61726,
+      "sha256": "a66f4e32f5b0d746b379c3dce99160a7c3767392747cd35d486a5734b882abff",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\datos\\gcode\\A4\\P9_BARRIDO_Z3_PETG_A1.gcode.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": true,
+      "objects": 0,
+      "parts": 0,
+      "subtypes": {},
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 0,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/P9_BARRIDO_Z_PETG_A1.gcode.3mf",
+      "size": 61724,
+      "sha256": "98b5fb04b4f6a1069ac6abd1a2c164576e531fbdb264c88f219d3af389155dcf",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\datos\\gcode\\A4\\P9_BARRIDO_Z_PETG_A1.gcode.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": true,
+      "objects": 0,
+      "parts": 0,
+      "subtypes": {},
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 0,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/plantilla.gcode.3mf",
+      "size": 670685,
+      "sha256": "dda74763c1660736b3065286e8a38043b6468c865cc17d0959e2f98af2045808",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\informes\\plantilla.gcode.3mf",
+      "application": "BambuStudio-02.04.00.70",
+      "predicted_native": true,
+      "is_sliced": true,
+      "objects": 0,
+      "parts": 0,
+      "subtypes": {},
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 0,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/PRUEBA_FDMHUB.3mf",
+      "size": 47201,
+      "sha256": "74b93593d6614170ac34683bd4e6b7488893243c000180972c2a51e34396c39c",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\informes\\PRUEBA_FDMHUB.3mf",
+      "application": "BambuStudio-02.08.02.60",
+      "predicted_native": true,
+      "is_sliced": false,
+      "objects": 2,
+      "parts": 1,
+      "subtypes": {
+        "normal_part": 1
+      },
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 1,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/PRUEBA_FDMHUB.gcode.3mf",
+      "size": 101407,
+      "sha256": "e8fa968a18feed7a142a84b6d9b0b0bbdf313c61068601ed092cd1bdf52ed575",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\informes\\PRUEBA_FDMHUB.gcode.3mf",
+      "application": "BambuStudio-02.04.00.70",
+      "predicted_native": true,
+      "is_sliced": true,
+      "objects": 0,
+      "parts": 0,
+      "subtypes": {},
+      "plater_ids": [
+        "1"
+      ],
+      "model_instances": 0,
+      "paint_attrs": [],
+      "ams_list_count": 0
+    },
+    {
+      "path": "fdmhub/PRUEBA_FDMHUB.stl",
+      "size": 82084,
+      "sha256": "15da54cb52d0280af4ea7a9bb31772588a70c8c3d9a231ad536aea087fb06bda",
+      "origin": "C:\\Users\\yosef_torres\\Documents\\FDM-HUB\\informes\\PRUEBA_FDMHUB.stl"
+    }
+  ]
+}

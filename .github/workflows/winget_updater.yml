@@ -4,6 +4,11 @@ on:
     types: [ released ]
 jobs:
   publish:
+    # NOCTE-BEGIN ci
+    # Upstream-only: publishes the SoftFever.OrcaSlicer WinGet manifest with the
+    # upstream WINGET_TOKEN. A fork release would otherwise fire this and fail.
+    if: github.repository == 'OrcaSlicer/OrcaSlicer'
+    # NOCTE-END
     runs-on: windows-latest
     steps:
       - uses: vedantmgoyal9/winget-releaser@main

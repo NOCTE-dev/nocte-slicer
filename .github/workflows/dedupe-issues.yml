@@ -12,6 +12,11 @@ on:
 
 jobs:
   dedupe-issues:
+    # NOCTE-BEGIN ci
+    # Upstream-only: needs the upstream CLAUDE_CODE_OAUTH_TOKEN and
+    # STATSIG_API_KEY secrets, and dedupes against OrcaSlicer's issue history.
+    if: github.repository == 'OrcaSlicer/OrcaSlicer'
+    # NOCTE-END
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

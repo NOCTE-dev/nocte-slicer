@@ -40,7 +40,13 @@ jobs:
   build:
     name: Find the build to test
     # Don't run scheduled checks on forks
-    if: github.event_name != 'schedule' || github.repository == 'OrcaSlicer/OrcaSlicer'
+    # NOCTE-BEGIN ci
+    # Upstream-only, including manual dispatch: it pulls the latest successful
+    # build_all.yml Linux AppImage and drives OrcaSlicer/orca-test-repo, neither
+    # of which exists for the fork. The effect/harness jobs need this one, so
+    # guarding it here skips them too.
+    if: github.repository == 'OrcaSlicer/OrcaSlicer'
+    # NOCTE-END
     runs-on: ubuntu-24.04
     outputs:
       run_id: ${{ steps.find.outputs.run_id }}

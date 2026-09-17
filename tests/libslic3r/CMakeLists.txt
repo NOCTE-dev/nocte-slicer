@@ -49,6 +49,10 @@ add_executable(${_TEST_NAME}_tests
     test_ordering_strategies.cpp
     # test_png_io.cpp
     test_indexed_triangle_set.cpp
+# NOCTE-BEGIN nocte-engine
+    test_nocte_mesh_diagnostics.cpp
+    test_nocte_mesh_repair.cpp
+# NOCTE-END
     ../libnest2d/printer_parts.cpp
     )
 

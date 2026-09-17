@@ -28,6 +28,12 @@ permissions:
 jobs:
   publish:
     name: Publish binaries to draft release
+    # NOCTE-BEGIN ci
+    # Upstream-only: OrcaSlicer's release pipeline, gated on the RELEASE_PUBLISHER
+    # repo variable and uploading to OrcaSlicer draft releases. The fork has no
+    # release process in M0.
+    if: github.repository == 'OrcaSlicer/OrcaSlicer'
+    # NOCTE-END
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

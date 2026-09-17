@@ -7,6 +7,11 @@ on:
 
 jobs:
   auto-close-duplicates:
+    # NOCTE-BEGIN ci
+    # Upstream-only: closes duplicates in OrcaSlicer's issue tracker and needs
+    # the upstream STATSIG_API_KEY secret.
+    if: github.repository == 'OrcaSlicer/OrcaSlicer'
+    # NOCTE-END
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

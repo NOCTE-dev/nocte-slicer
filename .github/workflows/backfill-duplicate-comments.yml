@@ -20,6 +20,11 @@ on:
 
 jobs:
   backfill-duplicate-comments:
+    # NOCTE-BEGIN ci
+    # Upstream-only: backfills the duplicate-detection bot's comments on
+    # OrcaSlicer issues.
+    if: github.repository == 'OrcaSlicer/OrcaSlicer'
+    # NOCTE-END
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

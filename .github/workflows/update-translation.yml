@@ -7,6 +7,11 @@ on:
 jobs:
   update_translation:
     name: Update translation
+    # NOCTE-BEGIN ci
+    # Upstream-only: regenerates the .pot/.po catalogs and pushes a commit
+    # straight to the default branch. The fork tracks upstream catalogs instead.
+    if: github.repository == 'OrcaSlicer/OrcaSlicer'
+    # NOCTE-END
     runs-on: ubuntu-latest
     steps:  
       - name: Checkout repository

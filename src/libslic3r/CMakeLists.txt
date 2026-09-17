@@ -506,6 +506,21 @@ set(lisbslic3r_sources
     GCode/ToolOrderUtils.cpp
     FlushVolPredictor.hpp
     FlushVolPredictor.cpp
+# NOCTE-BEGIN nocte-engine
+    Nocte/NocteVersion.hpp
+    Nocte/MeshDiagnostics.cpp
+    Nocte/MeshDiagnostics.hpp
+    Nocte/RepairOps.hpp
+    Nocte/MeshRepair.cpp
+    Nocte/MeshRepair.hpp
+    Nocte/GeometryAnalysis.cpp
+    Nocte/GeometryAnalysis.hpp
+    Nocte/AutoTune.cpp
+    Nocte/AutoTune.hpp
+    Nocte/Rules/RuleSet.hpp
+    Nocte/Report.cpp
+    Nocte/Report.hpp
+# NOCTE-END
 )
 
 if (APPLE)

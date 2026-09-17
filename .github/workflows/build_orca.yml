@@ -505,32 +505,49 @@ jobs:
         shell: cmd
         run: '"C:/Program Files/7-Zip/7z.exe" a -tzip OrcaSlicer_Windows_${{ env.ver }}${{ env.ARCH_SUFFIX }}_portable.zip ${{ github.workspace }}/${{ env.BUILD_DIR }}/OrcaSlicer'
 
+      # NOCTE-BEGIN ci
+      # Upstream-only: -mx9 lzma2 over a gigabyte of PDBs adds ~10 min to every
+      # run and the fork has no symbol server to feed. Flip both PDB steps back
+      # on (drop the repository guard) when you need to debug a shipped crash.
       - name: Pack PDB
-        if: runner.os == 'Windows' && inputs.arch != 'arm64' && !vars.SELF_HOSTED
+        if: github.repository == 'OrcaSlicer/OrcaSlicer' && runner.os == 'Windows' && inputs.arch != 'arm64' && !vars.SELF_HOSTED
         working-directory: ${{ github.workspace }}/${{ env.BUILD_DIR }}/src/Release
         shell: cmd
         run: '"C:/Program Files/7-Zip/7z.exe" a -m0=lzma2 -mx9 Debug_PDB_${{ env.ver }}_for_developers_only.7z  *.pdb'
+      # NOCTE-END
 
+      # NOCTE-BEGIN ci
+      # The fork uploads the portable tree under one stable, version-independent
+      # name (nocte-slicer-windows-x64) so the docs and any later tooling can
+      # point straight at it. Upstream keeps its versioned name. Still a single
+      # upload - the tree is several hundred MB and uploading it twice would
+      # roughly double the tail of the job.
       - name: Upload artifacts Win zip
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
-          name: OrcaSlicer_Windows_${{ env.ver }}${{ env.ARCH_SUFFIX }}_portable
+          name: ${{ github.repository == 'OrcaSlicer/OrcaSlicer' && format('OrcaSlicer_Windows_{0}{1}_portable', env.ver, env.ARCH_SUFFIX) || format('nocte-slicer-windows-{0}', inputs.arch) }}
           path: ${{ github.workspace }}/${{ env.BUILD_DIR }}/OrcaSlicer
+      # NOCTE-END
 
+      # NOCTE-BEGIN ci
+      # Same stable naming for the NSIS installer.
       - name: Upload artifacts Win installer
         if: runner.os == 'Windows' && !vars.SELF_HOSTED
         uses: actions/upload-artifact@v7
         with:
-          name: OrcaSlicer_Windows_${{ env.ver }}${{ env.ARCH_SUFFIX }}
+          name: ${{ github.repository == 'OrcaSlicer/OrcaSlicer' && format('OrcaSlicer_Windows_{0}{1}', env.ver, env.ARCH_SUFFIX) || format('nocte-slicer-windows-{0}-installer', inputs.arch) }}
           path: ${{ github.workspace }}/${{ env.BUILD_DIR }}/OrcaSlicer*.exe
+      # NOCTE-END
 
+      # NOCTE-BEGIN ci
       - name: Upload artifacts Win PDB
-        if: runner.os == 'Windows' && inputs.arch != 'arm64' && !vars.SELF_HOSTED
+        if: github.repository == 'OrcaSlicer/OrcaSlicer' && runner.os == 'Windows' && inputs.arch != 'arm64' && !vars.SELF_HOSTED
         uses: actions/upload-artifact@v7
         with:
           name: PDB
           path: ${{ github.workspace }}/build/src/Release/Debug_PDB_${{ env.ver }}_for_developers_only.7z
+      # NOCTE-END
 
       - name: Upload OrcaSlicer_profile_validator Win
         if: runner.os == 'Windows' && inputs.arch != 'arm64' && !vars.SELF_HOSTED
@@ -572,8 +589,11 @@ jobs:
           asset_content_type: application/x-msdownload
           max_releases: 1
 
+      # NOCTE-BEGIN ci
+      # Upstream-only: the MSIX is Microsoft Store packaging, keyed to
+      # OrcaSlicer's publisher identity (ORCA_MSIX_* org variables).
       - name: Build MSIX Store package Win
-        if: runner.os == 'Windows' && !vars.SELF_HOSTED
+        if: github.repository == 'OrcaSlicer/OrcaSlicer' && runner.os == 'Windows' && !vars.SELF_HOSTED
         working-directory: ${{ github.workspace }}
         shell: pwsh
         run: |
@@ -586,11 +606,12 @@ jobs:
             -PublisherDisplayName "${{ vars.ORCA_MSIX_PUBLISHER_DISPLAY_NAME || 'OrcaSlicer' }}"
 
       - name: Upload artifacts Win MSIX
-        if: runner.os == 'Windows' && !vars.SELF_HOSTED
+        if: github.repository == 'OrcaSlicer/OrcaSlicer' && runner.os == 'Windows' && !vars.SELF_HOSTED
         uses: actions/upload-artifact@v7
         with:
           name: OrcaSlicer_Windows_MSIX_${{ env.ver }}${{ env.ARCH_SUFFIX }}
           path: ${{ github.workspace }}/${{ env.BUILD_DIR }}/OrcaSlicer_Windows_MSIX_${{ env.ver }}${{ env.ARCH_SUFFIX }}.msix
+      # NOCTE-END
 
 # Ubuntu
       - name: Apt-Install Dependencies
