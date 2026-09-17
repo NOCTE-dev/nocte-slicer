@@ -74,6 +74,18 @@ from inspect3mf import (
 #: value is not.
 UUID_ATTRS = ("UUID",)
 
+#: Per-part ``<metadata key=...>`` entries whose *value* every writer in the
+#: Bambu dialect rewrites on save, so a change is reported but is not a
+#: compatibility failure. ``matrix`` is the only one so far: the reader stores it
+#: into ``volume->source.transform`` (``bbs_3mf.cpp`` ~L5157) and the writer
+#: serialises ``volume->get_matrix() * volume->source.transform.get_matrix()``
+#: (~L8024), so every load+save multiplies it by the volume's component
+#: transform again. Measured on 2026-09-17: identical growth from the NOCTE CLI
+#: and from Bambu Studio 02.08.02.61. The authoritative placement lives in the
+#: ``<component>`` / build ``<item>`` transforms in ``3D/3dmodel.model``, which
+#: are compared separately and do *not* drift.
+RECOMPOUNDED_PART_KEYS = ("matrix",)
+
 #: Default cap on the number of diff lines printed per section.
 DEFAULT_MAX_LINES = 200
 
@@ -416,14 +428,25 @@ def _compare_model_settings(
                     f"{label} config keys differ (lost: {only_a}, gained: {only_b})",
                 )
             for key in sorted(set(part_a["metadata"]) & set(part_b["metadata"])):
-                if part_a["metadata"][key] != part_b["metadata"][key]:
+                if part_a["metadata"][key] == part_b["metadata"][key]:
+                    continue
+                if key in RECOMPOUNDED_PART_KEYS:
                     _diff(
                         records,
-                        "model_settings/part_values",
-                        f"{label} key {key!r}: "
+                        "model_settings/part_recompounded",
+                        f"{label} key {key!r} recompounded by the writer: "
                         f"{short(part_a['metadata'][key])} -> "
                         f"{short(part_b['metadata'][key])}",
+                        severity="layout",
                     )
+                    continue
+                _diff(
+                    records,
+                    "model_settings/part_values",
+                    f"{label} key {key!r}: "
+                    f"{short(part_a['metadata'][key])} -> "
+                    f"{short(part_b['metadata'][key])}",
+                )
 
     if a["plater_ids"] != b["plater_ids"]:
         _diff(

@@ -64,6 +64,12 @@ FILAMENT_SEQUENCE_ENTRY = "Metadata/filament_sequence.json"
 
 NATIVE_APPLICATION_PREFIX = "BambuStudio-"
 
+#: NOCTE Slicer marks its own files additively: a metadata tag in the root model
+#: part and a project report archive entry. Bambu Studio ignores both, so they
+#: never cost us the native import path -- but the harness must see them.
+NOCTE_METADATA_TAG = "NocteSlicer"
+NOCTE_REPORT_ENTRY = "Metadata/nocte_report.json"
+
 #: Triangle attributes that carry painting / per-face state.
 PAINT_ATTRS = (
     "paint_color",
@@ -583,6 +589,11 @@ def inspect_3mf(path: str | Path) -> dict[str, Any]:
         )
         summary["model_metadata"] = metadata
 
+        # -- NOCTE Slicer provenance ---------------------------------------
+        summary["nocte_tag"] = metadata.get(NOCTE_METADATA_TAG)
+        summary["nocte_tag_present"] = NOCTE_METADATA_TAG in metadata
+        summary["nocte_report_present"] = NOCTE_REPORT_ENTRY in name_set
+
         # -- model_settings.config ----------------------------------------
         ms_bytes = read(MODEL_SETTINGS_ENTRY)
         if ms_bytes is None:
@@ -696,6 +707,10 @@ def format_summary(summary: dict[str, Any]) -> str:
     add(
         f"Predicted native: {summary.get('predicted_native')} "
         f"(prefix 'BambuStudio-' {prefix_state})"
+    )
+    add(
+        f"NOCTE           : tag={summary.get('nocte_tag')!r} "
+        f"{NOCTE_REPORT_ENTRY}={summary.get('nocte_report_present')}"
     )
     model = summary.get("model", {})
     add(f"Production ext  : {model.get('has_production_ext')}")

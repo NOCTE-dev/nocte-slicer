@@ -64,7 +64,19 @@ Covered by `tests/libslic3r/test_nocte_3mf.cpp` (`[Nocte3mf]`): the tag survives
 
 ### Identity gate evidence (V1 vs V2)
 
-*Placeholder — to be filled by the `tools/bbl-compat` oracle run described under **Verification**.* Record here, for both `Application = NocteSlicer-<ver>` (V1) and `Application = BambuStudio-<SLIC3R_VERSION>` plus the `NocteSlicer` tag (V2): the Bambu Studio version under test, the exit code, the verdict against criteria (a)–(g), and the log excerpts that show whether the file was detected as native. Do not edit the paragraphs above from that run; append the evidence here.
+Measured on 2026-09-17 with the Bambu Studio 02.08.02.61 command line on Windows 11, through `tools/bbl-compat/oracle.py`, on `corpus/nocte-cli/01_single_cube` and `02_modifier_block`. V2 is the file as NØCTE writes it (`Application = BambuStudio-02.08.01.55`). V1 is a copy in which only the `Application` value was rewritten to `NocteSlicer-0.1.0`. Bambu Studio writes no plaintext log (its log is encrypted), so the evidence is exit codes, `result.json`, the generated gcode and the structure of the re-exported 3mf. Full tables: `tools/bbl-compat/NOTES.md` §8.
+
+| run | V2 | V1 |
+|---|---|---|
+| `--info` | exit 0 | exit 0, `Success.` |
+| `--slice 0` | exit 0 | exit 0, `Success.` |
+| `--slice 0 --export-3mf` | exit 0, 3mf written, criteria (a)(c)(d)(e) PASS | **exit `0xC0000005` (access violation), no `result.json`, no 3mf** |
+
+Controls on the same file: an identical re-zip with the value untouched exports fine; `BambuStudio-02.08.01.55-NocteSlicer` (prefix kept, suffix added) exports fine; `OrcaSlicer-2.5.0` crashes exactly like V1. The gate is therefore the `BambuStudio-` prefix of the `Application` value, not the NØCTE name and not the archive rewriting.
+
+What V1 changes before the crash, with the same geometry and the same embedded project settings: `sparse_infill_density` comes back as Bambu Studio's default (20 %) instead of the project's 15 %, so the embedded settings were discarded; the filament becomes `filament_id "unknown"` with 0.0 g used instead of 3.68 g; the object is re-arranged on the plate; the instance transform is baked into the mesh (20.0 becomes 19.999998); the gcode is a different file (192 kB against 422 kB). `--info` and `--slice` still report success for V1, so an exit code alone does not detect the non-native path.
+
+This is the command-line behaviour; the same export was not exercised through the Bambu Studio GUI. It agrees with the FDM-HUB measurements quoted above and with the source reading of `_handle_end_metadata()`. V2 stays the default and the only supported identity. The V1/V2 comparison above used the CI binary that predates the `NocteSlicer` tag and `Metadata/nocte_report.json`. The first binary that writes both (CI run 35241116400) regenerated the four `corpus/nocte-cli` files, and Bambu Studio 02.08.02.61 loaded, sliced and re-exported all four with criteria (a)(c)(d)(e) passing, subtypes and per-part overrides intact (`tools/bbl-compat/NOTES.md` §9). The tag and the extra archive entry do not cost native mode.
 
 ## Consequences
 

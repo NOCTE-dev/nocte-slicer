@@ -1,0 +1,69 @@
+{
+  "case": "02_modifier_block",
+  "notes": "cube plus an inner modifier_part carrying two per-part overrides",
+  "written_by": "nocte-cli",
+  "generator": "tools/bbl-compat/make_corpus.ps1",
+  "slicer_build": "35241116400",
+  "authored_with": "BambuStudio-02.08.01.55",
+  "bambu_studio_oracle": "02.08.02.61",
+  "sources": [
+    "cube20.stl",
+    "modifier8.stl"
+  ],
+  "findings": [],
+  "02_modifier_block.3mf": {
+    "predicted_native": true,
+    "application_prefix": "BambuStudio-",
+    "object_count": 1,
+    "part_count": 2,
+    "subtypes": {
+      "normal_part": 1,
+      "modifier_part": 1
+    },
+    "part_subtypes_in_order": [
+      "normal_part",
+      "modifier_part"
+    ],
+    "part_names_in_order": [
+      "cube20_1",
+      "modifier8_1"
+    ],
+    "part_config_keys_required": {
+      "cube20_1": [],
+      "modifier8_1": [
+        "sparse_infill_density",
+        "wall_loops"
+      ]
+    },
+    "part_config_values_required": {
+      "cube20_1": {},
+      "modifier8_1": {
+        "sparse_infill_density": "35%",
+        "wall_loops": "5"
+      }
+    },
+    "plater_ids": [
+      "1"
+    ],
+    "model_instance_count": 1,
+    "paint_attrs_present": [],
+    "is_sliced": false,
+    "entries_required": [
+      "3D/3dmodel.model",
+      "Metadata/model_settings.config",
+      "Metadata/project_settings.config"
+    ],
+    "nocte_tag": {
+      "metadata_name": "NocteSlicer",
+      "in": "3D/3dmodel.model",
+      "required_from_build": "block2",
+      "present_in_this_file": true,
+      "value_in_this_file": "0.1.0-dev"
+    },
+    "nocte_report": {
+      "entry": "Metadata/nocte_report.json",
+      "required_from_build": "block2",
+      "present_in_this_file": true
+    }
+  }
+}
