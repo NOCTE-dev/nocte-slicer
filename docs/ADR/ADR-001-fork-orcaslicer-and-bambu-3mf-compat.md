@@ -52,6 +52,20 @@ NØCTE is therefore identifiable inside the file without losing native mode. The
 
 **Empirical evidence from NØCTE's own FDM-HUB tool** (`calibracion/APRENDIDO.md` §1ter L113–149; `calibracion/herramientas/armar_probeta.py:82-106`): with any `Application` value not starting with "BambuStudio", Studio treats the 3mf as an imported mesh — loose mesh, `filament_id=unknown`, 0.00 g, no AMS macros (`T1000` absent) — even though slicing reports *Success*. FDM-HUB therefore uses `APP_POR_OMISION = "BambuStudio-02.08.02.60"`. V1 is thus already measured as a failure; V2 is the default.
 
+## Implementation (2026-09-17)
+
+The identity described in §3 is written by the 3mf exporter in `src/libslic3r/Format/bbs_3mf.cpp`, in two additive touch points marked `NOCTE-BEGIN nocte-3mf-identity`.
+
+- **The tag.** `_add_model_file_to_archive()` assigns `NOCTE_3MF_METADATA_TAG` → `NOCTE_VERSION` (`src/libslic3r/Nocte/NocteVersion.hpp`) into `metadata_item_map`, in the same `else` branch that writes `Application = BambuStudio-<SLIC3R_VERSION>`. The `Application` line itself is untouched. Assigning into the map rather than emitting a second `<metadata>` element is what makes the tag idempotent: the importer stores every unrecognised metadata name into `model_info->metadata_items`, and the exporter seeds `metadata_item_map` from there, so a project opened from a NØCTE 3mf and saved again already carries a `NocteSlicer` key — the assignment overwrites it instead of duplicating it.
+- **The report.** `_save_model_to_file()` adds `Metadata/nocte_report.json` with `mz_zip_writer_add_mem()`, right after `_add_filament_sequence_file_to_archive()`. The content comes from `Slic3r::Nocte::project_report_json()` (`src/libslic3r/Nocte/ProjectReport.{hpp,cpp}`), schema `nocte.project-report/1`: the NØCTE version, the generator name, one entry per object with its volume and facet counts, and a `reports` array that the repair pipeline fills later. It is deliberately cheap — no mesh analysis — and gated by the single switch `Nocte::project_report_enabled()`. Unlike its neighbours, a failure to add the entry is **non-fatal**: it is logged at warning level and the export continues, because no other reader knows about the file and losing a project over an informational entry would be the worse outcome.
+- **The minimal-published guard.** Both are omitted when `m_minimal_published` is set (`SaveStrategy::MinimalPublished`). The tag is erased from `metadata_item_map` alongside `Application`, `OrcaSlicer` and the `BambuStudio:3mfVersion` markers, so a project opened from a NØCTE 3mf cannot leak it into a published file; the report is skipped by the same flag because it names the generator. A published 3mf therefore stays fully tag-less, as the publish feature requires.
+
+Covered by `tests/libslic3r/test_nocte_3mf.cpp` (`[Nocte3mf]`): the tag survives a store → load round trip while `Application` still starts with `BambuStudio-`; the report entry exists and parses with the expected schema; a store → load → store cycle writes the tag exactly once; a minimal-published store writes neither.
+
+### Identity gate evidence (V1 vs V2)
+
+*Placeholder — to be filled by the `tools/bbl-compat` oracle run described under **Verification**.* Record here, for both `Application = NocteSlicer-<ver>` (V1) and `Application = BambuStudio-<SLIC3R_VERSION>` plus the `NocteSlicer` tag (V2): the Bambu Studio version under test, the exit code, the verdict against criteria (a)–(g), and the log excerpts that show whether the file was detected as native. Do not edit the paragraphs above from that run; append the evidence here.
+
 ## Consequences
 
 **Positive:** native Bambu 3mf support on day one; a mature slicing engine, GUI and profile set; permissive mesh-processing libraries already vendored; a clean extension point for printer agents; effort concentrated on the three differentiating features.
