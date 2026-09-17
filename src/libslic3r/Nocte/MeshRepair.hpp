@@ -2,8 +2,9 @@
 //
 // Step-by-step, explainable mesh repair. A plan is derived from the diagnostics, every step names
 // the issue ids it targets, and the user accepts or rejects each one; a bounded snapshot stack
-// makes accepting reversible. The session is wx-free and CGAL-free — the operations that need CGAL
-// or a voxel pass are planned here but executed elsewhere from M1 on.
+// makes accepting reversible. The session is wx-free and includes no CGAL header of its own: the
+// operations that need CGAL go through Nocte/NocteCgal.hpp, whose implementation is compiled into
+// the libslic3r_cgal target. Tier 2 and tier 3 are planned but not yet executable.
 
 #ifndef slic3r_Nocte_MeshRepair_hpp_
 #define slic3r_Nocte_MeshRepair_hpp_
@@ -21,8 +22,9 @@
 namespace Slic3r {
 namespace Nocte {
 
-// Cheap enough to call before and after every step; surface_area is exact, self_intersections is
-// left at -1 because counting them needs CGAL.
+// Cheap enough to call before and after every step; surface_area is exact. self_intersections is
+// filled with 0 or 1 on meshes small enough for the CGAL test to be quick and stays at -1 on the
+// rest, because the step runs it four times per accept.
 MeshMetrics compute_metrics(const indexed_triangle_set &its);
 
 // Derives the ordered repair plan from a diagnosis. Steps come out sorted by tier, and each one

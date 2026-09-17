@@ -1,6 +1,7 @@
 // NØCTE Slicer — Copyright (c) 2026 NØCTE Engineering. AGPL-3.0-or-later.
 
 #include "libslic3r/Nocte/MeshDiagnostics.hpp"
+#include "libslic3r/Nocte/NocteCgal.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -9,8 +10,18 @@
 #include <deque>
 #include <iomanip>
 #include <limits>
+#include <numeric>
 #include <sstream>
 #include <unordered_map>
+#include <utility>
+
+#include <Eigen/Core>
+// Header-only in this tree (deps_src/libigl is an INTERFACE target and IGL_STATIC_LIBRARY is never
+// defined), so the single-point overload instantiates here.
+#include <igl/winding_number.h>
+// Some libigl headers define a one-letter macro that collides with the localisation macros; nothing
+// below uses it, but the #undef keeps the include order from mattering.
+#undef L
 
 namespace Slic3r {
 namespace Nocte {
@@ -174,22 +185,371 @@ void store_capped(std::vector<T> &dst, const std::vector<T> &src, size_t cap)
     dst.assign(src.begin(), src.begin() + std::ptrdiff_t(std::min(cap, src.size())));
 }
 
-} // namespace
+// Cap used by the two checks that do not receive DiagnosticsParams. Same value as the default.
+constexpr size_t default_reported_primitives = 4096;
 
-bool check_self_intersections(const indexed_triangle_set & /* its */, std::vector<MeshIssue> & /* out */, std::string *error_message)
+// A vertex is non-manifold when its incident facets fall into more than one fan: starting from one
+// facet and hopping to facets that share an edge *through this vertex* cannot reach all of them.
+// Two boxes joined at a single corner are the textbook case, and CGAL PMP's
+// duplicate_non_manifold_vertices() is what pulls them apart.
+//
+// Facets that name the same vertex twice are ignored here, exactly as its_mesh_edges() ignores
+// them; they are reported as degenerate facets instead.
+size_t its_non_manifold_vertices(const indexed_triangle_set &its, std::vector<int> &out_vertices, std::vector<int> &out_faces)
 {
-    if (error_message)
-        *error_message = "SelfIntersection: not implemented in M0. The check needs CGAL PMP and must live in "
-                         "NocteCgal.cpp inside the libslic3r_cgal target.";
-    return false;
+    if (its.indices.empty() || its.vertices.empty())
+        return 0;
+
+    const VertexFaceIndex vertex_faces(its);
+
+    size_t                           found = 0;
+    std::vector<int>                 local_faces;
+    std::vector<int>                 local_parent;
+    // (the other endpoint of an edge at this vertex, the local facet that first used it)
+    std::vector<std::pair<int, int>> spokes;
+
+    for (int v = 0; v < int(its.vertices.size()); ++ v) {
+        local_faces.clear();
+        for (VertexFaceIndex::iterator it = vertex_faces.begin(size_t(v)); it != vertex_faces.end(size_t(v)); ++ it) {
+            const stl_triangle_vertex_indices &tri = its.indices[*it];
+            if (tri(0) == tri(1) || tri(1) == tri(2) || tri(0) == tri(2))
+                continue;
+            local_faces.push_back(int(*it));
+        }
+        if (local_faces.size() < 2)
+            continue;
+
+        local_parent.resize(local_faces.size());
+        std::iota(local_parent.begin(), local_parent.end(), 0);
+        auto root_of = [&local_parent](int x) {
+            while (local_parent[size_t(x)] != x) {
+                local_parent[size_t(x)] = local_parent[size_t(local_parent[size_t(x)])];
+                x                       = local_parent[size_t(x)];
+            }
+            return x;
+        };
+
+        spokes.clear();
+        for (size_t k = 0; k < local_faces.size(); ++ k) {
+            const stl_triangle_vertex_indices &tri = its.indices[size_t(local_faces[k])];
+            for (int c = 0; c < 3; ++ c) {
+                if (tri(c) != v)
+                    continue;
+                const int neighbours[2] = { tri((c + 1) % 3), tri((c + 2) % 3) };
+                for (int s = 0; s < 2; ++ s) {
+                    bool joined = false;
+                    for (const std::pair<int, int> &spoke : spokes)
+                        if (spoke.first == neighbours[s]) {
+                            const int a = root_of(int(k));
+                            const int b = root_of(spoke.second);
+                            if (a != b)
+                                local_parent[size_t(b)] = a;
+                            joined = true;
+                            break;
+                        }
+                    if (! joined)
+                        spokes.emplace_back(neighbours[s], int(k));
+                }
+                break;
+            }
+        }
+
+        int fans = 0;
+        for (size_t k = 0; k < local_faces.size(); ++ k)
+            if (root_of(int(k)) == int(k))
+                ++ fans;
+
+        if (fans > 1) {
+            ++ found;
+            out_vertices.push_back(v);
+            for (int f : local_faces)
+                out_faces.push_back(f);
+        }
+    }
+    return found;
 }
 
-bool check_inverted_shell(const indexed_triangle_set & /* its */, std::vector<MeshIssue> & /* out */, std::string *error_message)
+// `outer` encloses `inner` with room to spare. Identical boxes do not count: a shell duplicated on
+// top of itself is not nested inside its copy.
+bool bbox_strictly_contains(const BoundingBoxf3 &outer, const BoundingBoxf3 &inner)
 {
-    if (error_message)
-        *error_message = "InvertedShell: not implemented in M0. Telling an inside-out shell from a correct one "
-                         "needs a generalised winding number (libigl fast_winding_number).";
-    return false;
+    if (! outer.defined || ! inner.defined)
+        return false;
+    for (int i = 0; i < 3; ++ i)
+        if (outer.min(i) > inner.min(i) || outer.max(i) < inner.max(i))
+            return false;
+    const Vec3d outer_size = outer.max - outer.min;
+    const Vec3d inner_size = inner.max - inner.min;
+    return outer_size.prod() > inner_size.prod();
+}
+
+} // namespace
+
+std::vector<ShellOrientation> its_shell_orientations(const indexed_triangle_set &its,
+                                                     size_t                      max_faces_for_winding,
+                                                     std::string                *skipped_reason)
+{
+    std::vector<ShellOrientation> shells;
+    const int                     face_count = int(its.indices.size());
+    if (face_count == 0)
+        return shells;
+
+    const std::vector<MeshEdge> edges = its_mesh_edges(its);
+
+    // ------------------------------------------------- edge-connected components, by union-find
+    std::vector<int> parent(size_t(face_count));
+    std::iota(parent.begin(), parent.end(), 0);
+    auto root_of = [&parent](int x) {
+        while (parent[size_t(x)] != x) {
+            parent[size_t(x)] = parent[size_t(parent[size_t(x)])];
+            x                 = parent[size_t(x)];
+        }
+        return x;
+    };
+    for (const MeshEdge &edge : edges)
+        for (size_t k = 1; k < edge.incident.size(); ++ k) {
+            const int a = root_of(edge.incident[0].face);
+            const int b = root_of(edge.incident[k].face);
+            if (a != b)
+                parent[size_t(b)] = a;
+        }
+
+    std::unordered_map<int, int> root_to_shell;
+    std::vector<int>             shell_of(size_t(face_count), -1);
+    for (int f = 0; f < face_count; ++ f) {
+        const int root = root_of(f);
+        auto      it   = root_to_shell.find(root);
+        int       idx;
+        if (it == root_to_shell.end()) {
+            idx = int(shells.size());
+            root_to_shell.emplace(root, idx);
+            shells.emplace_back();
+        } else {
+            idx = it->second;
+        }
+        shell_of[size_t(f)] = idx;
+        shells[size_t(idx)].faces.push_back(f);
+    }
+
+    // ----------------------------------------------------------- closedness, volume, bounding box
+    std::vector<size_t> shell_edges(shells.size(), 0);
+    std::vector<char>   shell_closed(shells.size(), 1);
+    for (const MeshEdge &edge : edges) {
+        const size_t s = size_t(shell_of[size_t(edge.incident[0].face)]);
+        ++ shell_edges[s];
+        if (edge.incident.size() != 2)
+            shell_closed[s] = 0;
+    }
+    for (size_t s = 0; s < shells.size(); ++ s) {
+        // A closed triangulated surface has exactly 3F/2 edges. A shell that also holds a facet
+        // with a repeated vertex index fails this, because such a facet contributes no edges.
+        if (shell_edges[s] * 2 != shells[s].faces.size() * 3)
+            shell_closed[s] = 0;
+        shells[s].closed = shell_closed[s] != 0;
+
+        double volume = 0.;
+        for (int f : shells[s].faces) {
+            const stl_triangle_vertex_indices &tri = its.indices[size_t(f)];
+            const Vec3d a = its.vertices[size_t(tri(0))].cast<double>();
+            const Vec3d b = its.vertices[size_t(tri(1))].cast<double>();
+            const Vec3d c = its.vertices[size_t(tri(2))].cast<double>();
+            volume += a.dot(b.cross(c)) / 6.;
+            shells[s].bbox.merge(a);
+            shells[s].bbox.merge(b);
+            shells[s].bbox.merge(c);
+        }
+        shells[s].volume = volume;
+    }
+
+    // --------------------------------------------------------------------------- nesting depth
+    // Only shells whose bounding box is strictly inside another's can be nested, and that cheap
+    // test is what separates a cavity from two solids that merely interpenetrate.
+    std::vector<std::vector<int>> containers(shells.size());
+    bool                          needs_winding = false;
+    for (size_t i = 0; i < shells.size(); ++ i)
+        for (size_t j = 0; j < shells.size(); ++ j)
+            if (i != j && shells[j].closed && bbox_strictly_contains(shells[j].bbox, shells[i].bbox)) {
+                containers[i].push_back(int(j));
+                needs_winding = true;
+            }
+
+    const bool winding_affordable = its.indices.size() <= max_faces_for_winding;
+    if (needs_winding && ! winding_affordable && skipped_reason != nullptr)
+        *skipped_reason = "InvertedShell: nesting of " + std::to_string(shells.size()) + " shell(s) left undecided — the "
+                          "winding-number test is capped at " + std::to_string(max_faces_for_winding) +
+                          " facets and this mesh has " + std::to_string(its.indices.size()) + ". Shells that no other "
+                          "shell encloses were still checked.";
+
+    Eigen::MatrixXd              vertices;
+    std::vector<Eigen::MatrixXi> shell_faces(shells.size());
+    if (needs_winding && winding_affordable) {
+        vertices.resize(Eigen::Index(its.vertices.size()), 3);
+        for (size_t v = 0; v < its.vertices.size(); ++ v) {
+            vertices(Eigen::Index(v), 0) = double(its.vertices[v].x());
+            vertices(Eigen::Index(v), 1) = double(its.vertices[v].y());
+            vertices(Eigen::Index(v), 2) = double(its.vertices[v].z());
+        }
+    }
+
+    auto faces_of = [&its, &shells, &shell_faces](size_t j) -> const Eigen::MatrixXi & {
+        Eigen::MatrixXi &F = shell_faces[j];
+        if (F.rows() == 0) {
+            F.resize(Eigen::Index(shells[j].faces.size()), 3);
+            for (size_t k = 0; k < shells[j].faces.size(); ++ k) {
+                const stl_triangle_vertex_indices &tri = its.indices[size_t(shells[j].faces[k])];
+                F(Eigen::Index(k), 0) = tri(0);
+                F(Eigen::Index(k), 1) = tri(1);
+                F(Eigen::Index(k), 2) = tri(2);
+            }
+        }
+        return F;
+    };
+
+    for (size_t i = 0; i < shells.size(); ++ i) {
+        if (containers[i].empty()) {
+            // Nothing encloses this shell's bounding box, so it is at depth 0 whatever the budget.
+            shells[i].depth       = 0;
+            shells[i].depth_known = true;
+            continue;
+        }
+        if (! winding_affordable)
+            continue;
+
+        // Three sample points on the shell rather than one: a single vertex could happen to sit on
+        // the enclosing surface, where the winding number is ambiguous. The median of the three is
+        // robust to one such sample.
+        const size_t n = shells[i].faces.size();
+        Vec3d        samples[3];
+        for (int s = 0; s < 3; ++ s) {
+            const size_t                       face = shells[i].faces[size_t(s) * (n - 1) / 2];
+            const stl_triangle_vertex_indices &tri  = its.indices[face];
+            samples[s] = its.vertices[size_t(tri(s))].cast<double>();
+        }
+
+        int depth = 0;
+        for (int j : containers[i]) {
+            const Eigen::MatrixXi &F = faces_of(size_t(j));
+            long long              rounded[3] = { 0, 0, 0 };
+            for (int s = 0; s < 3; ++ s) {
+                const Eigen::RowVector3d q(samples[s].x(), samples[s].y(), samples[s].z());
+                // igl::solid_angle() already divides by 2π (and carries a factor of two), so a point
+                // inside a closed outward-oriented shell comes back as ±1, not ±4π.
+                const double wn = igl::winding_number(vertices, F, q);
+                rounded[s]      = std::llround(std::fabs(wn));
+            }
+            std::sort(rounded, rounded + 3);
+            depth += int(rounded[1]);
+        }
+        shells[i].depth       = depth;
+        shells[i].depth_known = true;
+    }
+
+    // --------------------------------------------------------------------------------- verdict
+    for (ShellOrientation &shell : shells) {
+        shell.inverted = false;
+        if (! shell.closed || ! shell.depth_known)
+            continue;
+        // A shell that encloses nothing is a ZeroVolumeShell, reported on its own terms.
+        if (std::abs(shell.volume) < 1e-12)
+            continue;
+        const bool should_be_negative = (shell.depth % 2) == 1;
+        shell.inverted                = (shell.volume < 0.) != should_be_negative;
+    }
+
+    return shells;
+}
+
+bool check_self_intersections(const indexed_triangle_set &its, std::vector<MeshIssue> &out, std::string *error_message,
+                              size_t max_faces)
+{
+    if (its.indices.empty())
+        return true;
+
+    if (its.indices.size() > max_faces) {
+        if (error_message)
+            *error_message = "SelfIntersection: not run — the mesh has " + std::to_string(its.indices.size()) +
+                             " facets, past the limit of " + std::to_string(max_faces) +
+                             " where the CGAL test stops being quick enough to run interactively.";
+        return false;
+    }
+
+    const cgal::SelfIntersectionResult probe = cgal::self_intersections(its);
+    if (! probe.ok) {
+        if (error_message)
+            *error_message = "SelfIntersection: " + probe.message;
+        return false;
+    }
+    if (! probe.intersects)
+        return true;
+
+    MeshIssue issue;
+    issue.kind     = IssueKind::SelfIntersection;
+    issue.severity = Severity::Blocking;
+    issue.count    = probe.pairs > 0 ? size_t(probe.pairs) : 1;
+    issue.metric   = double(probe.pairs);
+    issue.issue_id = "self-intersections-1";
+    issue.bbox     = Slic3r::bounding_box(its);
+    {
+        std::vector<int> faces;
+        faces.reserve(probe.face_pairs.size() * 2);
+        for (const std::pair<int, int> &pair : probe.face_pairs) {
+            faces.push_back(pair.first);
+            faces.push_back(pair.second);
+        }
+        std::sort(faces.begin(), faces.end());
+        faces.erase(std::unique(faces.begin(), faces.end()), faces.end());
+        // Empty while NocteCgal only answers the yes/no question; filled the day
+        // PMP::self_intersections() is adopted, without any change here.
+        store_capped(issue.face_ids, faces, default_reported_primitives);
+    }
+    issue.explanation = "The surface passes through itself: at least one pair of facets crosses. Inside and outside are "
+                        "no longer well defined there, so a boolean or a shell offset can produce nonsense even though "
+                        "the mesh looks closed. The exact number of crossing pairs is not counted — CGAL is only asked "
+                        "the yes/no question, which is far cheaper — so this issue reports one occurrence.";
+    out.push_back(std::move(issue));
+    return true;
+}
+
+bool check_inverted_shell(const indexed_triangle_set &its, std::vector<MeshIssue> &out, std::string *error_message,
+                          size_t max_faces_for_winding)
+{
+    if (its.indices.empty())
+        return true;
+
+    std::string                         skipped;
+    const std::vector<ShellOrientation> shells = its_shell_orientations(its, max_faces_for_winding, &skipped);
+
+    int index = 0;
+    for (const ShellOrientation &shell : shells) {
+        if (! shell.inverted)
+            continue;
+
+        MeshIssue issue;
+        issue.kind     = IssueKind::InvertedShell;
+        issue.severity = Severity::Blocking;
+        issue.count    = shell.faces.size();
+        issue.metric   = shell.volume;
+        issue.issue_id = "inverted-shell-" + std::to_string(++ index);
+        issue.bbox     = shell.bbox;
+        store_capped(issue.face_ids, shell.faces, default_reported_primitives);
+        issue.explanation = "A closed shell of " + std::to_string(shell.faces.size()) + " facet(s) is oriented "
+                            "consistently but points the wrong way: it " +
+                            (shell.depth % 2 == 1
+                                 ? std::string("sits inside another shell, so it should face inwards as a cavity, and does not")
+                                 : std::string("encloses a negative volume, so its normals face inwards instead of outwards")) +
+                            ". Nothing is wrong with the shape; flipping the shell's facets fixes it without moving a "
+                            "vertex.";
+        out.push_back(std::move(issue));
+    }
+
+    // Anything found above is reported either way; a non-empty `skipped` only says that some shells
+    // could not be judged.
+    if (! skipped.empty()) {
+        if (error_message)
+            *error_message = skipped;
+        return false;
+    }
+    return true;
 }
 
 DiagnosticsResult diagnose(const indexed_triangle_set &its, const DiagnosticsParams &params)
@@ -404,6 +764,31 @@ DiagnosticsResult diagnose(const indexed_triangle_set &its, const DiagnosticsPar
         }
     }
 
+    // ------------------------------------------------------------------- non-manifold vertices
+    if (params.check_non_manifold_vertices) {
+        std::vector<int> bad_vertices;
+        std::vector<int> bad_faces;
+        const size_t     count = its_non_manifold_vertices(its, bad_vertices, bad_faces);
+        if (count > 0) {
+            std::sort(bad_faces.begin(), bad_faces.end());
+            bad_faces.erase(std::unique(bad_faces.begin(), bad_faces.end()), bad_faces.end());
+
+            MeshIssue issue;
+            issue.kind     = IssueKind::NonManifoldVertex;
+            issue.severity = Severity::Blocking;
+            issue.count    = count;
+            issue.metric   = double(bad_faces.size());
+            issue.issue_id = "nonmanifold-vertices-1";
+            store_capped(issue.face_ids, bad_faces, cap);
+            for (int v : bad_vertices)
+                merge_vertex(issue.bbox, its, v);
+            issue.explanation = std::to_string(count) + " vertex/vertices are pinch points: the facets around them fall "
+                                "into more than one fan, so the surface touches itself at a single point without sharing "
+                                "an edge. Splitting the vertex into one copy per fan separates them and moves nothing.";
+            result.issues.push_back(std::move(issue));
+        }
+    }
+
     // ------------------------------------------------------------------------ inverted normals
     if (params.check_inverted_normals) {
         std::vector<int> bad_faces;
@@ -467,19 +852,21 @@ DiagnosticsResult diagnose(const indexed_triangle_set &its, const DiagnosticsPar
     }
 
     // ------------------------------------------------------------------------- skipped checks
+    // Both checks append whatever they could establish and return false only when something was
+    // left undecided, which is what `skipped_checks` is for.
     if (params.check_self_intersections) {
         std::string message;
-        if (! check_self_intersections(its, result.issues, &message))
+        if (! check_self_intersections(its, result.issues, &message, params.max_faces_self_intersection))
             result.skipped_checks.push_back(message);
     } else {
-        result.skipped_checks.push_back("SelfIntersection: not run (CGAL check is out of scope for M0).");
+        result.skipped_checks.push_back("SelfIntersection: not run (turned off in DiagnosticsParams).");
     }
     if (params.check_inverted_shell) {
         std::string message;
-        if (! check_inverted_shell(its, result.issues, &message))
+        if (! check_inverted_shell(its, result.issues, &message, params.max_faces_inverted_shell))
             result.skipped_checks.push_back(message);
     } else {
-        result.skipped_checks.push_back("InvertedShell: not run (winding-number check is out of scope for M0).");
+        result.skipped_checks.push_back("InvertedShell: not run (turned off in DiagnosticsParams).");
     }
 
     result.manifold = open_edges == 0 && non_manifold_edges == 0;

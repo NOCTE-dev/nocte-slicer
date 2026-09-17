@@ -518,8 +518,13 @@ set(lisbslic3r_sources
     Nocte/AutoTune.cpp
     Nocte/AutoTune.hpp
     Nocte/Rules/RuleSet.hpp
+    Nocte/Rules/rules_v1.cpp
     Nocte/Report.cpp
     Nocte/Report.hpp
+    Nocte/ProjectReport.cpp
+    Nocte/ProjectReport.hpp
+    Nocte/BblCompat.cpp
+    Nocte/BblCompat.hpp
 # NOCTE-END
 )
 
@@ -558,6 +563,9 @@ add_library(libslic3r_cgal STATIC
     MeshBoolean.hpp MeshBoolean.cpp
     TryCatchSignal.hpp TryCatchSignal.cpp
     Triangulation.hpp Triangulation.cpp
+# NOCTE-BEGIN nocte-engine
+    Nocte/NocteCgal.hpp Nocte/NocteCgal.cpp
+# NOCTE-END
 )
 target_include_directories(libslic3r_cgal PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
