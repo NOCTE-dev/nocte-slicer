@@ -159,10 +159,13 @@ TEST_CASE("nocte auto-tune: an overhanging part gets support", "[NocteAutoTune]"
     REQUIRE(enable->rule_id == "R002-overhang-supports");
     REQUIRE(enable->value == "1");
 
-    // The cap is wide, not tall, so a normal support block is preferred over tree support.
-    const Recommendation *type = find_rec(result, "support_type");
-    REQUIRE(type != nullptr);
-    REQUIRE(type->value == "normal(auto)");
+    // The cap is wide, not tall, so R002 proposes "normal(auto)" - which is also the stock default
+    // of support_type (PrintConfig.cpp: set_default_value(new ConfigOptionEnum<SupportType>(
+    // stNormalAuto))), so tune() drops it as a recommendation that would change nothing (the rule
+    // for that is covered by "a recommendation equal to the current value is skipped"). Tree
+    // support would differ from the default and survive, so the absence of a support_type
+    // recommendation is what proves the squat branch was taken.
+    REQUIRE(find_rec(result, "support_type") == nullptr);
 
     // NØCTE measures the overhang angle from the vertical; Orca's threshold is the complement.
     const Recommendation *threshold = find_rec(result, "support_threshold_angle");
