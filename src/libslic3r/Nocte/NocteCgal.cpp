@@ -187,7 +187,10 @@ CycleInfo cycle_info(const _EpicMesh &mesh, HalfedgeDescriptor h0)
     return info;
 }
 
-int border_halfedge_count(const _EpicMesh &mesh)
+// Takes the mesh by non-const reference on purpose: both existing call sites of
+// extract_boundary_cycles() in this tree (MeshBoolean.cpp:335 and :526) pass a mutable mesh, and
+// the overload took a mutable one before CGAL made it const. Non-const binds under either.
+int border_halfedge_count(_EpicMesh &mesh)
 {
     std::vector<HalfedgeDescriptor> cycles;
     CGALProc::extract_boundary_cycles(mesh, std::back_inserter(cycles));

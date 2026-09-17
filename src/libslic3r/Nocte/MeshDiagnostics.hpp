@@ -4,7 +4,8 @@
 // why in plain language, so the repair planner can name what it targets and the report can show
 // a before/after. The module is wx-free and unit-testable. It never includes a CGAL header: the
 // self-intersection test goes through Nocte/NocteCgal.hpp, whose implementation lives in the
-// libslic3r_cgal target. The winding-number work is libigl, which libslic3r links itself.
+// libslic3r_cgal target. The winding number is computed in plain Eigen, so the module depends on
+// nothing libslic3r does not already carry.
 
 #ifndef slic3r_Nocte_MeshDiagnostics_hpp_
 #define slic3r_Nocte_MeshDiagnostics_hpp_
@@ -90,7 +91,7 @@ struct DiagnosticsParams
     bool check_zero_volume        = true;
     // Runs CGAL PMP through Nocte/NocteCgal.hpp, subject to max_faces_self_intersection.
     bool check_self_intersections = true;
-    // Runs the per-shell signed volume plus a libigl winding number, subject to
+    // Runs the per-shell signed volume plus a generalized winding number, subject to
     // max_faces_inverted_shell.
     bool check_inverted_shell     = true;
 };
@@ -170,7 +171,7 @@ struct ShellOrientation
 
 // Splits `its` into edge-connected shells and works out which of them are inside out.
 //
-// Nesting is decided with a libigl winding number, but only for pairs whose bounding boxes are
+// Nesting is decided with a generalized winding number, but only for pairs whose bounding boxes are
 // strictly nested. That pre-filter is what keeps two interpenetrating solids — whose boxes overlap
 // without either containing the other — from being mistaken for a solid inside a cavity. A shell
 // no other box encloses is at depth 0 by construction, so it is judged even when the winding pass

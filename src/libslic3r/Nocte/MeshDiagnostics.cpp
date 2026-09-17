@@ -16,12 +16,6 @@
 #include <utility>
 
 #include <Eigen/Core>
-// Header-only in this tree (deps_src/libigl is an INTERFACE target and IGL_STATIC_LIBRARY is never
-// defined), so the single-point overload instantiates here.
-#include <igl/winding_number.h>
-// Some libigl headers define a one-letter macro that collides with the localisation macros; nothing
-// below uses it, but the #undef keeps the include order from mattering.
-#undef L
 
 namespace Slic3r {
 namespace Nocte {
@@ -283,6 +277,39 @@ bool bbox_strictly_contains(const BoundingBoxf3 &outer, const BoundingBoxf3 &inn
     return outer_size.prod() > inner_size.prod();
 }
 
+// Generalized winding number of `q` with respect to the triangle soup (V, F), by the
+// Van Oosterom-Strackee formula: with a, b, c the corners of a facet taken relative to q, that
+// facet subtends a signed solid angle of 2·atan2(det[a b c], |a||b||c| + (a·b)|c| + (b·c)|a| +
+// (c·a)|b|). Summed over a closed, outward-oriented shell the solid angles come to 4π, so the
+// halved form divided by 2π is +1 for a point inside and 0 for one outside; a shell wound the
+// other way gives -1, which is why the caller takes the magnitude.
+//
+// This is the same arithmetic as igl::winding_number()'s single-point overload (igl/solid_angle.cpp
+// divides by 2π for exactly this reason). It is spelled out here rather than included, because
+// igl/winding_number.h is header-only in this tree and drags in the whole WindingNumberAABB
+// hierarchy — some ninety headers, one of them <windows.h> — for a batch overload we never call.
+double generalized_winding_number(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const Vec3d &q)
+{
+    // 2π. The winding number is the summed half-solid-angle over this.
+    constexpr double two_pi = 6.28318530717958647692;
+
+    double w = 0.;
+    for (Eigen::Index f = 0; f < F.rows(); ++ f) {
+        const Eigen::Index i0 = Eigen::Index(F(f, 0));
+        const Eigen::Index i1 = Eigen::Index(F(f, 1));
+        const Eigen::Index i2 = Eigen::Index(F(f, 2));
+        const Vec3d a(V(i0, 0) - q.x(), V(i0, 1) - q.y(), V(i0, 2) - q.z());
+        const Vec3d b(V(i1, 0) - q.x(), V(i1, 1) - q.y(), V(i1, 2) - q.z());
+        const Vec3d c(V(i2, 0) - q.x(), V(i2, 1) - q.y(), V(i2, 2) - q.z());
+        const double la = a.norm(), lb = b.norm(), lc = c.norm();
+        const double denominator = la * lb * lc + a.dot(b) * lc + b.dot(c) * la + c.dot(a) * lb;
+        // atan2(0, 0) is 0 on every platform this builds for, which is the right answer for a
+        // facet degenerate enough that both arguments vanish: it subtends nothing.
+        w += std::atan2(a.dot(b.cross(c)), denominator);
+    }
+    return w / two_pi;
+}
+
 } // namespace
 
 std::vector<ShellOrientation> its_shell_orientations(const indexed_triangle_set &its,
@@ -431,10 +458,10 @@ std::vector<ShellOrientation> its_shell_orientations(const indexed_triangle_set 
             const Eigen::MatrixXi &F = faces_of(size_t(j));
             long long              rounded[3] = { 0, 0, 0 };
             for (int s = 0; s < 3; ++ s) {
-                const Eigen::RowVector3d q(samples[s].x(), samples[s].y(), samples[s].z());
-                // igl::solid_angle() already divides by 2π (and carries a factor of two), so a point
-                // inside a closed outward-oriented shell comes back as ±1, not ±4π.
-                const double wn = igl::winding_number(vertices, F, q);
+                // Normalised so that a point inside a closed, consistently oriented shell comes
+                // back as ±1 rather than ±4π; the sign follows the shell's winding, which is why
+                // only the magnitude is used.
+                const double wn = generalized_winding_number(vertices, F, samples[s]);
                 rounded[s]      = std::llround(std::fabs(wn));
             }
             std::sort(rounded, rounded + 3);
