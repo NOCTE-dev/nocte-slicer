@@ -78,6 +78,9 @@ using namespace nlohmann;
 #include "libslic3r/Orient.hpp"
 #include "libslic3r/PNGReadWrite.hpp"
 #include "libslic3r/ObjColorUtils.hpp"
+// NOCTE-BEGIN nocte-bbl-compat
+#include "libslic3r/Nocte/BblCompat.hpp"
+// NOCTE-END
 
 #include "OrcaSlicer.hpp"
 #include <wx/filename.h>
@@ -1758,8 +1761,22 @@ int CLI::run(int argc, char **argv)
                         BOOST_LOG_TRIVIAL(info) << "object "<<o->name <<", id :" << o->id().id << ", from bbl 3mf\n";
                     }*/
 
-                    Semver cli_ver = *Semver::parse(SoftFever_VERSION);
-                    if (!allow_newer_file && ((cli_ver.maj() < file_version.maj()) || ((cli_ver.maj() == file_version.maj()) && (cli_ver.min() < file_version.min())))){
+                    // NOCTE-BEGIN nocte-bbl-compat
+                    // Upstream compared `file_version` against SoftFever_VERSION (Orca numbering,
+                    // 2.5.x). For a Bambu Studio project `file_version` comes from the `Application`
+                    // string `BambuStudio-02.08.02.61` (bbs_3mf.cpp ~1447 / ~3988) and is in *Bambu*
+                    // numbering, so every BS >= 2.6 project looked newer and the CLI exited -24.
+                    // Model::read_from_file() passes nullptr for load_bbs_3mf()'s `is_orca_3mf`
+                    // out-param (Model.cpp:404), so the "this file carries the OrcaSlicer tag" flag is
+                    // not reachable here; we therefore treat every 3mf as Bambu-numbered and compare
+                    // against SLIC3R_VERSION. Because SLIC3R_VERSION (02.08.x) is ahead of
+                    // SoftFever_VERSION (2.5.x), this can only accept more files than upstream did,
+                    // never fewer. Upstream was:
+                    //   Semver cli_ver = *Semver::parse(SoftFever_VERSION);
+                    //   if (!allow_newer_file && ((cli_ver.maj() < file_version.maj()) || ((cli_ver.maj() == file_version.maj()) && (cli_ver.min() < file_version.min())))){
+                    const bool nocte_file_version_newer = Slic3r::Nocte::file_version_is_newer(file_version, /*file_is_orca_numbered*/ false);
+                    // NOCTE-END
+                    if (!allow_newer_file && nocte_file_version_newer){
                         BOOST_LOG_TRIVIAL(error) << boost::format("Version Check: File Version %1% not supported by current cli version %2%")%file_version.to_string() %SoftFever_VERSION;
                         record_exit_reson(outfile_dir, CLI_FILE_VERSION_NOT_SUPPORTED, 0, cli_errors[CLI_FILE_VERSION_NOT_SUPPORTED], sliced_info);
                         flush_and_exit(CLI_FILE_VERSION_NOT_SUPPORTED);
@@ -4068,6 +4085,21 @@ int CLI::run(int argc, char **argv)
         sla_print_config.apply(m_print_config, true);
         m_print_config.apply(sla_print_config, true);*/
     }
+
+    // NOCTE-BEGIN nocte-bbl-compat
+    // Bambu Studio 02.08.02 writes -1 for `raft_first_layer_expansion` and `tree_support_wall_count`
+    // meaning "auto"; Orca defines both with min = 0, so the strict validation below would reject the
+    // project with -18 CLI_INVALID_VALUES_IN_3MF. Map the sentinels onto their Orca equivalents first.
+    // The GUI load path (Plater.cpp ~8810) only warns and keeps loading, so it is left untouched.
+    {
+        std::vector<std::string> nocte_bbl_notes;
+        const size_t nocte_bbl_fixed = Slic3r::Nocte::sanitize_bbl_config(m_print_config, &nocte_bbl_notes);
+        for (const std::string &note : nocte_bbl_notes)
+            BOOST_LOG_TRIVIAL(warning) << "nocte-bbl-compat: " << note;
+        if (nocte_bbl_fixed > 0)
+            BOOST_LOG_TRIVIAL(warning) << boost::format("nocte-bbl-compat: adjusted %1% Bambu Studio \"auto\" value(s) before validation")%nocte_bbl_fixed;
+    }
+    // NOCTE-END
 
     std::map<std::string, std::string> validity = m_print_config.validate(true);
     if (!validity.empty()) {
