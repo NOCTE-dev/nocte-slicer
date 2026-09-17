@@ -154,3 +154,53 @@ The first real `--slice` sweep should be done with
 - No corpus file has any paint attribute and none has an `<ams_list>`, so criteria
   (f) and (g) are `skip` for the whole current corpus. They only come alive with
   `corpus/bambu-studio/05_mmu_painted_4ams`, which has to be authored by hand.
+
+## 6. Findings from the first CI-built binary (2026-09-17, run 35180882793)
+
+Binary: `nocte-slicer-windows-x64` artifact (`orca-slicer.exe`, base upstream main @ 6b0e190e64,
+`SoftFever_VERSION 2.5.0-dev`, `SLIC3R_VERSION 02.08.01.55`). Headless CLI works on a machine
+without admin rights; it writes nothing to stdout except `Slic3r::CLI::run found error, exit` on
+failure. Use PowerShell `Start-Process ... -PassThru` to read the true (negative) exit code; Git Bash
+shows it masked.
+
+- **`-24 CLI_FILE_VERSION_NOT_SUPPORTED` on every Bambu Studio 02.08.02.6x project.**
+  `src/OrcaSlicer.cpp` (~L1761) compares `SoftFever_VERSION` (2.5.x) against the *Bambu Studio*
+  version parsed from the 3mf `Application` string (2.8.x) as if they were the same numbering, so
+  any file from BS >= 2.6 is "newer". Bypass: `--allow-newer-file`. For NØCTE this check must be
+  rewritten to compare against `SLIC3R_VERSION` (the Bambu-compatible version) — candidate
+  touch point, to be decided in M1.
+- **`-18 CLI_INVALID_VALUES_IN_3MF` on Bambu Studio 02.08.02 projects.** BS writes
+  `raft_first_layer_expansion = -1` and `tree_support_wall_count = -1` (meaning "auto"); Orca's
+  option ranges are `[0, +inf)` and `[0, 2]`, so the strict CLI validation rejects the project.
+  The GUI path applies substitutions instead. Implication for the oracle: round trips of
+  BS-authored projects through the NØCTE CLI need either relaxed validation or a
+  `-1 -> auto` migration in `PrintConfigDef::handle_legacy()` (M1 decision). Implication for
+  export: NØCTE must never write `-1` for these keys unless the target BS version accepts it.
+- Corpus files with `Application` 02.04.00.70 pass the version check but are sliced `.gcode.3mf`
+  files with no geometry, so they are not usable as export inputs.
+- **`-13 CLI_EXPORT_3MF_ERROR` when `--export-3mf` gets an absolute path.** Both Orca and Bambu
+  Studio concatenate the value onto `--outputdir`; pass a bare file name. This is the -13 that
+  FDM-HUB hit with Bambu Studio 02.04 and worked around by patching `.gcode.3mf` files by hand.
+  `oracle.py` now passes `reexport.3mf` and Bambu Studio 02.08.02.61 exports fine.
+- Packaged builds ship profiles as `resources/profiles/<Vendor>.opc` bundles; the CLI
+  `--load-settings` / `--load-filaments` want the JSON files, which live in the source tree
+  (`resources/profiles/BBL/{machine,process,filament}/*.json`).
+
+### First native round trip (2026-09-17)
+
+`tools/bbl-compat/smoke_export.ps1`: STL -> NØCTE 3mf (A1 0.4 nozzle, 0.20mm Standard, Bambu PLA
+Basic) -> `oracle.py --slice` against Bambu Studio 02.08.02.61.
+
+| crit | result | note |
+|---|---|---|
+| (a) | PASS | `--info` and `--slice 0 --export-3mf` both `return_code 0`, `Success.` |
+| (b) | skip | no plaintext log (encrypted studio log) |
+| (c) | PASS | `Application = BambuStudio-02.08.01.55` |
+| (d) | PASS | file version <= 02.08.02.61 |
+| (e) | PASS | object, `normal_part`, per-part keys, `plater_id`, one `model_instance` preserved |
+| (f)/(g) | skip | test file has no paint attributes / `ams_list` (needs corpus 05) |
+
+Observed and to be studied in M1: Bambu Studio's re-export drops 266 `project_settings` keys and
+adds 105 (Orca-only keys are discarded, BS-only keys added), changes 13 values, and rewrites
+`3D/3dmodel.model` (39 canonicalised diff lines, e.g. item transform / UUIDs). None of that affects
+native detection, but the auto-tune overrides must only use keys Bambu Studio keeps.

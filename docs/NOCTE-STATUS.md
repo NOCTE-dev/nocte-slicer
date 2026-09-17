@@ -7,6 +7,7 @@ Base: OrcaSlicer upstream `main` @ `6b0e190e64` (tag `nocte-base-2026-09-16`). U
 ## CI
 
 - First full `Build all` run on the fork (workflow_dispatch, 2026-09-17): green on Windows x64, Linux x86_64/aarch64, macOS arm64/x86_64 and Flatpak. Windows deps built in 55 min, slicer in 1 h 24 min, unit tests 5 min. Artifact `nocte-slicer-windows-x64` produced. `NOCTE checks` green.
+- First native round trip (2026-09-17): CI-built binary exported an STL to 3mf with A1 profiles; Bambu Studio 02.08.02.61 CLI loaded it (`Success.`), sliced it and re-exported it with object/part/plate/instance intact. Oracle criteria (a)(c)(d)(e) PASS; (b)(f)(g) skipped for lack of log / paint / AMS in the test file. Details and CLI quirks (-24, -18, -13) in `tools/bbl-compat/NOTES.md` §6.
 - Known: the initial push to the empty repository did not fire `push` workflows; manual dispatch works and later pushes trigger normally.
 
 ## M0 scaffold

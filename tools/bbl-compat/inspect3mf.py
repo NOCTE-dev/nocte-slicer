@@ -321,7 +321,10 @@ def parse_model_settings(data: bytes) -> dict[str, Any]:
             for child in elem:
                 child_local = localname(child.tag)
                 if child_local == "metadata":
-                    obj["metadata"][attr(child, "key") or ""] = attr(child, "value")
+                    if attr(child, "key") is None:
+                        obj.setdefault("stats", {}).update({k: v for k, v in child.attrib.items()})
+                        continue
+                    obj["metadata"][attr(child, "key")] = attr(child, "value")
                 elif child_local == "part":
                     part: dict[str, Any] = {
                         "id": attr(child, "id"),
@@ -333,7 +336,10 @@ def parse_model_settings(data: bytes) -> dict[str, Any]:
                     for sub in child:
                         sub_local = localname(sub.tag)
                         if sub_local == "metadata":
-                            part["metadata"][attr(sub, "key") or ""] = attr(sub, "value")
+                            if attr(sub, "key") is None:
+                                part.setdefault("stats", {}).update({k: v for k, v in sub.attrib.items()})
+                                continue
+                            part["metadata"][attr(sub, "key")] = attr(sub, "value")
                         elif sub_local == "mesh_stat":
                             part["mesh_stat"] = dict(sub.attrib)
                     obj["parts"].append(part)
@@ -347,12 +353,16 @@ def parse_model_settings(data: bytes) -> dict[str, Any]:
             for child in elem:
                 child_local = localname(child.tag)
                 if child_local == "metadata":
-                    plate["metadata"][attr(child, "key") or ""] = attr(child, "value")
+                    if attr(child, "key") is None:
+                        continue
+                    plate["metadata"][attr(child, "key")] = attr(child, "value")
                 elif child_local == "model_instance":
                     inst: dict[str, Any] = {}
                     for sub in child:
                         if localname(sub.tag) == "metadata":
-                            inst[attr(sub, "key") or ""] = attr(sub, "value")
+                            if attr(sub, "key") is None:
+                                continue
+                            inst[attr(sub, "key")] = attr(sub, "value")
                     plate["model_instances"].append(inst)
                 elif child_local == "filament_map":
                     plate["filament_maps"].append(dict(child.attrib))
@@ -414,7 +424,9 @@ def parse_slice_info(data: bytes) -> dict[str, Any]:
             for child in elem:
                 child_local = localname(child.tag)
                 if child_local == "metadata":
-                    plate["metadata"][attr(child, "key") or ""] = attr(child, "value")
+                    if attr(child, "key") is None:
+                        continue
+                    plate["metadata"][attr(child, "key")] = attr(child, "value")
                 elif child_local == "filament":
                     plate["filaments"].append(dict(child.attrib))
                 elif child_local == "object":

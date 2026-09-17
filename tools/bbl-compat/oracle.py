@@ -34,7 +34,7 @@ Pipeline
    paint attribute presence.
 2. ``bambu-studio.exe --info --debug 5 --outputdir <workdir> <file>``.
 3. Optional (``--slice``): ``bambu-studio.exe --slice 0
-   --export-3mf <workdir>/reexport.3mf --outputdir <workdir> --debug 2 <file>``.
+   --export-3mf reexport.3mf --outputdir <workdir> --debug 2 <file>``.
 4. If ``reexport.3mf`` exists: inspect it and compare with the input
    (``structdiff``).
 5. Evaluate the pass criteria (a) .. (g) and print a PASS/FAIL table.
@@ -620,7 +620,9 @@ def run_oracle(
                 "--slice",
                 "0",
                 "--export-3mf",
-                str(reexport_path),
+                # Bambu Studio (and Orca) resolve this name relative to --outputdir;
+                # an absolute path is concatenated onto outputdir and the export fails with -13.
+                reexport_path.name,
                 "--outputdir",
                 str(workdir_path),
                 "--debug",
