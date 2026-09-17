@@ -2,7 +2,12 @@
 
 Living document (the HLSD describes the design as it stands and carries no status markers, per `AGENTS.md`).
 
-Base: OrcaSlicer upstream `main` @ `6b0e190e64` (tag `nocte-base-2026-09-16`). Updated: 2026-09-16.
+Base: OrcaSlicer upstream `main` @ `6b0e190e64` (tag `nocte-base-2026-09-16`). Updated: 2026-09-17.
+
+## CI
+
+- First full `Build all` run on the fork (workflow_dispatch, 2026-09-17): green on Windows x64, Linux x86_64/aarch64, macOS arm64/x86_64 and Flatpak. Windows deps built in 55 min, slicer in 1 h 24 min, unit tests 5 min. Artifact `nocte-slicer-windows-x64` produced. `NOCTE checks` green.
+- Known: the initial push to the empty repository did not fire `push` workflows; manual dispatch works and later pushes trigger normally.
 
 ## M0 scaffold
 
