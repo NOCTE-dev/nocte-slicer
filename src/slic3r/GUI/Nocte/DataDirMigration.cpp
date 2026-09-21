@@ -112,6 +112,12 @@ void report_failure(const fs::path &new_dir, const std::string &message)
                    "the OrcaSlicer folder was changed; you can import it by hand from\n"
                    "File > Import > Import Configs.\n";
         }
+        // A failed import must not prompt again on every start: the report above tells the
+        // user what happened, and the manual import path stays available.
+        boost::nowide::ofstream marker;
+        marker.open((new_dir / DECLINED_MARKER).string(), std::ios::out | std::ios::trunc);
+        if (marker.good())
+            marker << "The import from an OrcaSlicer data directory failed; see " << FAILURE_REPORT << ".\n";
     } catch (const std::exception &ex) {
         BOOST_LOG_TRIVIAL(error) << "nocte: could not write " << FAILURE_REPORT << ": " << ex.what();
     }

@@ -58,6 +58,7 @@ UPSTREAM_TOUCH_POINTS = (
     "scripts/run_gettext.sh",
     "scripts/HintsToPot.py",
     "scripts/test_build_win.ps1",
+    "tests/slic3rutils/test_plugin_audit.cpp",
 )
 
 # Directories the fork owns outright. No marker is required inside them.
