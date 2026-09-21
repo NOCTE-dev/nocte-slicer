@@ -162,7 +162,12 @@ wxString CopyrightsDialog::get_html_text()
                 "<font size=\"3\">",
          bgr_clr_str, text_clr_str, text_clr_str,
         _L("License"),
-        _L("Orca Slicer is licensed under "),
+        // NOCTE-BEGIN nocte-identity
+        // The licensed product is NOCTE Slicer. The lineage line below it, and the OrcaSlicer
+        // credits further down, stay exactly as upstream wrote them: ADR-003 adds the fork's
+        // identity around the AGPL credits, never in place of them. UTF-8 escapes, see line 25.
+        _L("N\xC3\x98" "CTE Slicer is licensed under "),
+        // NOCTE-END
         "https://www.gnu.org/licenses/agpl-3.0.html",_L("GNU Affero General Public License, version 3"),
         _L("Orca Slicer is based on PrusaSlicer and BambuStudio"),
         _L("Libraries"),

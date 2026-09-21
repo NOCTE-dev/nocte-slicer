@@ -2161,7 +2161,11 @@ bool Sidebar::priv::sync_extruder_list(bool &only_external_material, bool is_man
 
 void Sidebar::priv::update_sync_status(const MachineObject *obj)
 {
-    StateColor not_synced_colour(std::pair<wxColour, int>(wxColour("#009688"), StateColor::Normal));
+    // NOCTE-BEGIN nocte-identity
+    // Colour value only (ADR-003): the NOCTE accent key, a neutral grey in both themes
+    // (see gDarkColors in Widgets/StateColor.cpp).
+    StateColor not_synced_colour(std::pair<wxColour, int>(wxColour("#4A4A50"), StateColor::Normal));
+    // NOCTE-END
     auto clear_all_sync_status = [this]() {
         panel_printer_preset->ShowBadge(false);
         panel_printer_bed->ShowBadge(false);
@@ -2533,13 +2537,18 @@ Sidebar::Sidebar(Plater *parent)
         p->m_panel_printer_content = new wxPanel(p->scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
         p->m_panel_printer_content->SetBackgroundColour(wxColour(255, 255, 255));
 
+        // NOCTE-BEGIN nocte-identity
+        // Colour values only (ADR-003): the sidebar printer panel. The focus fill and the hover
+        // and focus borders were the ORCA teal and its 10 % tint; both become neutral keys that
+        // gDarkColors already maps (#F0F0F1 -> #333337, #4A4A50 -> #5A5A62).
         struct PanelColors {
             wxColour bg_normal = "#FFFFFF";
-            wxColour bg_focus  = "#E5F0EE";
+            wxColour bg_focus  = "#F0F0F1";
             wxColour bd_normal = "#DBDBDB";
-            wxColour bd_hover  = "#009688";
-            wxColour bd_focus  = "#009688";
+            wxColour bd_hover  = "#4A4A50";
+            wxColour bd_focus  = "#4A4A50";
         };
+        // NOCTE-END
         PanelColors panel_color;
 
         p->panel_printer_preset = new StaticBox(p->m_panel_printer_content);
@@ -2817,10 +2826,13 @@ Sidebar::Sidebar(Plater *parent)
                 std::pair<wxColour, int>(wxColour("#CECECE"), StateColor::Pressed),
                 std::pair<wxColour, int>(wxColour("#F8F8F8"), StateColor::Hovered),
                 std::pair<wxColour, int>(wxColour("#F8F8F8"), StateColor::Normal));
+        // NOCTE-BEGIN nocte-identity
+        // Colour values only (ADR-003): NOCTE accent key in place of the ORCA teal.
         StateColor btn_sync_bd_col(
-                std::pair<wxColour, int>(wxColour("#009688"), StateColor::Pressed),
-                std::pair<wxColour, int>(wxColour("#009688"), StateColor::Hovered),
+                std::pair<wxColour, int>(wxColour("#4A4A50"), StateColor::Pressed),
+                std::pair<wxColour, int>(wxColour("#4A4A50"), StateColor::Hovered),
                 std::pair<wxColour, int>(wxColour("#EEEEEE"), StateColor::Normal));
+        // NOCTE-END
         btn_sync->SetBackgroundColor(btn_sync_bg_col);
         btn_sync->SetBorderColor(btn_sync_bd_col);
         btn_sync->SetCanFocus(false);
@@ -3212,7 +3224,9 @@ Sidebar::Sidebar(Plater *parent)
             e.Skip();
             return;
         }
-        p->m_search_bar->SetBorderColor(wxColour("#009688"));
+        // NOCTE-BEGIN nocte-identity
+        p->m_search_bar->SetBorderColor(wxColour("#4A4A50")); // colour value only (ADR-003)
+        // NOCTE-END
         wxPoint pos = this->p->m_search_bar->ClientToScreen(wxPoint(0, 0));
 #ifndef __WXGTK__
         pos.y += this->p->m_search_bar->GetRect().height;
@@ -5942,7 +5956,9 @@ void Sidebar::sync_ams_list(bool is_from_big_sync_btn)
     wxGetApp().app_config ->set("ams_filament_ids", p->ams_list_device, ams_filament_ids);
     if (!unknowns.empty()) {
         MessageDialog dlg(this,
-            _L("There are some unknown or incompatible filaments mapped to generic preset.\nPlease update Orca Slicer or restart Orca Slicer to check if there is an update to system presets.") + detail,
+            // NOCTE-BEGIN nocte-identity  product name only (ADR-003); UTF-8 byte escapes, see AboutDialog.cpp:25
+            _L("There are some unknown or incompatible filaments mapped to generic preset.\nPlease update N\xC3\x98" "CTE Slicer or restart N\xC3\x98" "CTE Slicer to check if there is an update to system presets.") + detail,
+            // NOCTE-END
             _L("Sync filaments with AMS"), wxOK);
         dlg.ShowModal();
     }
@@ -8567,7 +8583,9 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
                     const wxString load_3mf_title              = _L("Load 3MF");
                     const wxString newer_3mf_title             = _L("Newer 3MF version");
                     const wxString bambu_project_title         = _L("BambuStudio Project");
-                    const wxString msg_unsupported_geometry    = _L("The 3MF is not supported by OrcaSlicer, loading geometry data only.");
+                    // NOCTE-BEGIN nocte-identity  product name only (ADR-003); UTF-8 byte escapes, see AboutDialog.cpp:25
+                    const wxString msg_unsupported_geometry    = _L("The 3MF is not supported by N\xC3\x98" "CTE Slicer, loading geometry data only.");
+                    // NOCTE-END
                     const wxString msg_old_orca_geometry       = _L("The 3MF file was generated by an old OrcaSlicer version, loading geometry data only.");
                     const wxString msg_older_geometry          = _L("The 3MF file was generated by an older version, loading geometry data only.");
                     const wxString msg_bambu_geometry          = _L("The 3MF file was generated by BambuStudio, loading geometry data only.");
@@ -8695,7 +8713,9 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
                                 }
                             } else if (load_config && !published_config.published) {
                                 // BambuStudio version is older or same as our SLIC3R_VERSION
-                                wxString text = _L("The 3MF was created by BambuStudio. Some settings may differ from OrcaSlicer.");
+                                // NOCTE-BEGIN nocte-identity  product name only (ADR-003); UTF-8 byte escapes, see AboutDialog.cpp:25
+                                wxString text = _L("The 3MF was created by BambuStudio. Some settings may differ from N\xC3\x98" "CTE Slicer.");
+                                // NOCTE-END
                                 log_and_show_3mf_info(text, bambu_project_title);
                             }
                         }
@@ -13531,7 +13551,13 @@ void Plater::priv::set_project_name(const wxString& project_name)
     if (!m_project_name.IsEmpty())
         wxGetApp().mainframe->update_title_colour_after_set_title();
 #else
-    wxGetApp().mainframe->SetTitle(m_project_name + " - OrcaSlicer");
+    // NOCTE-BEGIN nocte-identity
+    // Window title (ADR-003). m_project_name is a wxString, so the suffix is built with
+    // wxString::FromUTF8 from UTF-8 byte escapes; the literal is split so that "\x" cannot
+    // swallow the "C" that follows it (precedent: AboutDialog.cpp:25). Not translated: it is
+    // the product name.
+    wxGetApp().mainframe->SetTitle(m_project_name + wxString::FromUTF8(" - N\xC3\x98" "CTE Slicer"));
+    // NOCTE-END
     wxGetApp().mainframe->topbar()->SetTitle(m_project_name);
 #endif
 }
@@ -13551,7 +13577,10 @@ void Plater::priv::update_title_dirty_status()
     wxGetApp().mainframe->SetTitle(title);
     wxGetApp().mainframe->update_title_colour_after_set_title();
 #else
-    wxGetApp().mainframe->SetTitle(title + " - OrcaSlicer");
+    // NOCTE-BEGIN nocte-identity
+    // Window title, dirty-status path (ADR-003); same suffix as set_project_name() above.
+    wxGetApp().mainframe->SetTitle(title + wxString::FromUTF8(" - N\xC3\x98" "CTE Slicer"));
+    // NOCTE-END
     wxGetApp().mainframe->topbar()->SetTitle(title);
 #endif    
 }
@@ -15581,7 +15610,9 @@ void Plater::import_model_id(wxString download_info)
                         error);
 
                     if (retry_count == max_retries) {
-                        msg = _L("Importing to Orca Slicer failed. Please download the file and manually import it.");
+                        // NOCTE-BEGIN nocte-identity  product name only (ADR-003); UTF-8 byte escapes, see AboutDialog.cpp:25
+                        msg = _L("Importing to N\xC3\x98" "CTE Slicer failed. Please download the file and manually import it.");
+                        // NOCTE-END
                         cont = false;
                     }
                 })
@@ -20790,7 +20821,9 @@ void Plater::pop_warning_and_go_to_device_page(wxString printer_name, PrinterWar
                                        printer_name);
         } else {
             content = wxString::Format(
-                _L("OrcaSlicer can't connect to %s. Please check if the printer is powered on and connected to the network."), printer_name);
+                // NOCTE-BEGIN nocte-identity  product name only (ADR-003); UTF-8 byte escapes, see AboutDialog.cpp:25
+                _L("N\xC3\x98" "CTE Slicer can't connect to %s. Please check if the printer is powered on and connected to the network."), printer_name);
+                // NOCTE-END
         }
     } else if (type == PrinterWarningType::INCONSISTENT) {
         content = wxString::Format(_L("The currently connected printer on the device page is not %s. Please switch to %s before syncing."), printer_name, printer_name);

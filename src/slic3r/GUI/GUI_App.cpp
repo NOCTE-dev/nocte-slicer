@@ -2520,7 +2520,14 @@ void GUI_App::init_app_config()
     SetAppName(SLIC3R_APP_KEY);
 //	SetAppName(SLIC3R_APP_KEY "-alpha");
 //  SetAppName(SLIC3R_APP_KEY "-beta");
-//	SetAppDisplayName(SLIC3R_APP_NAME);
+	// NOCTE-BEGIN nocte-identity
+	// wxAppConsoleBase::SetAppDisplayName(const wxString&) — the human-readable name wx puts in
+	// its own message boxes, the macOS menu bar and wxStandardPaths. SetAppName() above stays
+	// SLIC3R_APP_KEY, because that one keys the data directory. The display name is the only
+	// place the "Ø" reaches wx from here, written as UTF-8 byte escapes and split so that "\x"
+	// does not swallow the "C" that follows (precedent: AboutDialog.cpp:25).
+	SetAppDisplayName(wxString::FromUTF8("N\xC3\x98" "CTE Slicer"));
+	// NOCTE-END
 
 	// Set the Slic3r data directory at the Slic3r XS module.
 	// Unix: ~/ .Slic3r
@@ -3053,9 +3060,16 @@ bool GUI_App::on_init_inner()
 #ifdef _MSW_DARK_MODE
 
 #ifndef __WINDOWS__
-    wxSystemAppearance app = wxSystemSettings::GetAppearance();
-    GUI::wxGetApp().app_config->set("dark_color_mode", app.IsDark() ? "1" : "0");
-    GUI::wxGetApp().app_config->save();
+    // NOCTE-BEGIN nocte-identity
+    // ADR-003: NOCTE Slicer is dark by default on every platform. AppConfig seeds
+    // "dark_color_mode" to "1" when the key is absent (AppConfig.cpp:360), but upstream
+    // overwrote that seed here, on every start, from the system appearance — so on a macOS or
+    // Linux desktop in light mode the seed never survived to dark_mode(). The system appearance
+    // no longer decides; the preference does, and the user changes it in Preferences.
+    // Note for the integrator: GUI_Utils.cpp:318 (update_dark_config()) still writes the key on
+    // every system colour-scheme change. That file is not an upstream touch point, so the same
+    // override survives there; it is listed in docs/block3/W2-report.md.
+    // NOCTE-END
 #endif // __APPLE__
 
 
@@ -4136,11 +4150,21 @@ bool GUI_App::dark_mode()
 {
 #ifdef SUPPORT_DARK_MODE
 #if __APPLE__
+    // NOCTE-BEGIN nocte-identity
+    // NOCTE Slicer is dark by default on every platform (ADR-003), and the seed of
+    // "dark_color_mode" in AppConfig is "1". Upstream asked macOS unconditionally here, so the
+    // preference the user sets in Preferences was ignored on that platform; honour an explicit
+    // "1"/"0" first, exactly as the Windows and Linux branch below does, and only fall back to
+    // the OS when the key has never been written.
+    const auto &mac_val = wxGetApp().app_config->get("dark_color_mode");
+    if (mac_val == "1") return true;
+    if (mac_val == "0") return false;
     // The check for dark mode returns false positive on 10.12 and 10.13,
     // which allowed setting dark menu bar and dock area, which is
     // is detected as dark mode. We must run on at least 10.14 where the
     // proper dark mode was first introduced.
     return wxPlatformInfo::Get().CheckOSVersion(10, 14) && mac_dark_mode();
+    // NOCTE-END
 #else
     // When the user has explicitly chosen a mode, honour it directly.
     // Falling through to check_dark_mode() for an explicit "0" would query
@@ -4171,20 +4195,25 @@ const wxColour GUI_App::get_label_default_clr_modified()
 void GUI_App::init_label_colours()
 {
     bool is_dark_mode = dark_mode();
+    // NOCTE-BEGIN nocte-identity
+    // Colour values only (ADR-003): the label palette comes from Nocte/NocteTheme.hpp —
+    // NOCTE_TEXT #F2F2F2, NOCTE_TEXT_MUTED #9A9A9E, NOCTE_SELECTION_BG #2A2A2E,
+    // NOCTE_BG_PANEL #1A1A1C. m_color_label_modified stays the orange "modified" marker.
     m_color_label_modified = is_dark_mode ? wxColour("#F1754E") : wxColour("#F1754E");
-    m_color_label_sys      = is_dark_mode ? wxColour("#B2B3B5") : wxColour("#363636");
+    m_color_label_sys      = is_dark_mode ? wxColour("#9A9A9E") : wxColour("#363636");
 
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
-    m_color_label_default           = is_dark_mode ? wxColour(250, 250, 250) : m_color_label_sys; // wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+    m_color_label_default           = is_dark_mode ? wxColour(242, 242, 242) : m_color_label_sys; // wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
     m_color_highlight_label_default = is_dark_mode ? wxColour(230, 230, 230): wxSystemSettings::GetColour(/*wxSYS_COLOUR_HIGHLIGHTTEXT*/wxSYS_COLOUR_WINDOWTEXT);
-    m_color_highlight_default       = is_dark_mode ? wxColour("#36363B") : wxColour("#F1F1F1"); // ORCA row highlighting
+    m_color_highlight_default       = is_dark_mode ? wxColour("#2A2A2E") : wxColour("#F1F1F1"); // row highlighting
     m_color_hovered_btn_label       = is_dark_mode ? wxColour(255, 255, 254) : wxColour(0,0,0);
     m_color_default_btn_label       = is_dark_mode ? wxColour(255, 255, 254): wxColour(0,0,0);
-    m_color_selected_btn_bg         = is_dark_mode ? wxColour(84, 84, 91)   : wxColour(206, 206, 206);
+    m_color_selected_btn_bg         = is_dark_mode ? wxColour(58, 58, 62)   : wxColour(206, 206, 206);
 #else
     m_color_label_default = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
 #endif
-    m_color_window_default          = is_dark_mode ? wxColour(43, 43, 43)   : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+    m_color_window_default          = is_dark_mode ? wxColour(26, 26, 28)   : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+    // NOCTE-END
     StateColor::SetDarkMode(is_dark_mode);
 }
 

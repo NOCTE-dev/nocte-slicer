@@ -90,8 +90,12 @@ extern wxPopupWindow* wxCurrentPopupWindow;
 
 static constexpr const float TRACKBALLSIZE = 0.8f;
 
-static Slic3r::ColorRGBA DEFAULT_BG_LIGHT_COLOR      = { 0.906f, 0.906f, 0.906f, 1.0f };
-static Slic3r::ColorRGBA DEFAULT_BG_LIGHT_COLOR_DARK = { 0.329f, 0.329f, 0.353f, 1.0f };
+// NOCTE-BEGIN nocte-identity
+// Colour values only (ADR-003): the 3D viewport background, NOCTE_BG_LIGHT #E8E8E9 and
+// NOCTE_BG_PANEL #1A1A1C (Nocte/NocteTheme.hpp). The error background stays red.
+static Slic3r::ColorRGBA DEFAULT_BG_LIGHT_COLOR      = { 0.910f, 0.910f, 0.914f, 1.0f };
+static Slic3r::ColorRGBA DEFAULT_BG_LIGHT_COLOR_DARK = { 0.102f, 0.102f, 0.110f, 1.0f };
+// NOCTE-END
 static Slic3r::ColorRGBA ERROR_BG_LIGHT_COLOR        = { 0.753f, 0.192f, 0.039f, 1.0f };
 static Slic3r::ColorRGBA ERROR_BG_LIGHT_COLOR_DARK   = { 0.753f, 0.192f, 0.039f, 1.0f };
 
@@ -9105,7 +9109,11 @@ void GLCanvas3D::_render_imgui_select_plate_toolbar()
             text_bottom = std::to_string(sliced_plates_cnt) + " / " + std::to_string(total_plates_cnt);
             ImVec2 bar_fg_end = ImVec2(bar_bg_bgn.x + bar_total_perc_pos + bar_current_perc_pos, bar_bg_end.y);
             ImGui::GetWindowDrawList()->AddRectFilled(bar_bg_bgn, bar_bg_end, IM_COL32(128, 128, 128, 255), bar_size.y); // BAR BACKGROUND
-            ImGui::GetWindowDrawList()->AddRectFilled(bar_bg_bgn, bar_fg_end, IM_COL32(0, 150, 136, 255),   bar_size.y); // BAR PROGRESS
+            // NOCTE-BEGIN nocte-identity
+            // Colour value only (ADR-003): the all-plates slicing progress bar. NOCTE_TEXT
+            // #F2F2F2 on the grey 128,128,128 track, instead of the ORCA teal.
+            ImGui::GetWindowDrawList()->AddRectFilled(bar_bg_bgn, bar_fg_end, IM_COL32(242, 242, 242, 255), bar_size.y); // BAR PROGRESS
+            // NOCTE-END
         }
         else if (all_plates_stats_item->slice_state == IMToolbarItem::SliceState::SLICE_FAILED) {
             text_top    = _u8L("Failed");

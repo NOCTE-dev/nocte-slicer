@@ -1,20 +1,30 @@
 #include "StateColor.hpp"
 #include <cmath>
+// NOCTE-BEGIN nocte-identity
+#include "../Nocte/NocteTheme.hpp"
+// NOCTE-END
 
 static bool gDarkMode = false;
 
 static bool operator<(wxColour const &l, wxColour const &r) { return l.GetRGBA() < r.GetRGBA(); }
 
+// NOCTE-BEGIN nocte-identity
+// Colour values only (ADR-003): the keys are unchanged, because they are the literals the
+// light-mode widgets emit and darkModeColorFor() looks up. Only the right-hand column — what
+// dark mode substitutes — is rewritten, from the tokens in Nocte/NocteTheme.hpp. Values stay
+// pairwise distinct so StateColor::lightModeColorFor()'s reverted map stays a bijection.
+using namespace Slic3r::GUI::Nocte;
+
 static std::map<wxColour, wxColour> gDarkColors{
-    {"#009688", "#00675b"}, // rgb(0, 150, 136)    ORCA color
-    {"#1F8EEA", "#2778D2"}, // rgb(31, 142, 234)   ???
+    {"#009688", NOCTE_ACCENT_SURFACE}, // rgb(0, 150, 136)    ORCA color -> NOCTE accent surface (carries white text)
+    {"#1F8EEA", "#2778D2"}, // rgb(31, 142, 234)   ??? (status blue, not a brand colour)
     {"#FF6F00", "#D15B00"}, // rgb(255, 111, 0)    Secondary color
     {"#D01B1B", "#BB2A3A"}, // rgb(208, 27, 27)    ???
     {"#262E30", "#EFEFF0"}, // rgb(38, 46, 48)     Button text color | Input Text Color
     {"#DFDFDF", "#3E3E45"}, // rgb(223, 223, 223)  Button Background color
     {"#D4D4D4", "#4D4D54"}, // rgb(212, 212, 212)  Button Background color on Hover
     {"#6B6A6A", "#909090"}, // rgb(107, 107, 106)  Button Dimmed text
-    {"#26A69A", "#008172"}, // rgb(0, 150, 136)    Button Confirm Color hover | ORCA Color Hover
+    {"#26A69A", NOCTE_ACCENT_SURFACE_HOVER}, // rgb(38, 166, 154)  Button Confirm Color hover | ORCA Color Hover
     {"#6B6B6A", "#B3B3B5"}, // rgb(107, 107, 106)  Input box side text
     {"#2C2C2E", "#B3B3B4"}, // rgb(44, 44, 46)     ???
     {"#6B6B6B", "#818183"}, // rgb(107, 107, 107)  Disabled Text
@@ -22,34 +32,40 @@ static std::map<wxColour, wxColour> gDarkColors{
     {"#EEEEEE", "#4C4C55"}, // rgb(238, 238, 238)  Separator Line | Title Line Color
     {"#E8E8E8", "#3E3E45"}, // rgb(232, 232, 232)  ???
     {"#323A3D", "#E5E5E4"}, // rgb(50, 58, 61)     Softer text color
-    {"#FFFFFF", "#2D2D31"}, // rgb(255, 255, 255)  Window background
-    {"#F8F8F8", "#36363C"}, // rgb(248, 248, 248)  Sidebar > Titlebar > Gradient Top | BBL monitor page titlebar bg
-    {"#F1F1F1", "#36363B"}, // rgb(241, 241, 241)  Sidebar > Titlebar > Gradient Bottom
-    {"#3B4446", "#2D2D30"}, // rgb(59, 68, 78)     Top Bar / Main tab bar bg color
+    {"#FFFFFF", NOCTE_BG_PANEL},  // rgb(255, 255, 255)  Window background
+    {"#F8F8F8", NOCTE_BG_RAISED}, // rgb(248, 248, 248)  Sidebar > Titlebar > Gradient Top | BBL monitor page titlebar bg
+    {"#F1F1F1", "#222225"}, // rgb(241, 241, 241)  Sidebar > Titlebar > Gradient Bottom
+    {"#3B4446", NOCTE_BG_DARK}, // rgb(59, 68, 70)  Top Bar / Main tab bar bg color
     {"#CECECE", "#54545B"}, // rgb(206, 206, 206)  Sidebar wxPanel bg | 
     {"#DBFDD5", "#3B3B40"}, // rgb(219, 253, 213)  Not Used anymore // Was used for BBS combo boxes etc
     {"#000000", "#FFFFFE"}, // rgb(0, 0, 0)        Mostly Text color wxBlack
-    {"#F4F4F4", "#36363D"}, // rgb(244, 244, 244)  ???
-    {"#DBDBDB", "#4A4A51"}, // rgb(219, 219, 219)  Input/Combo Box Border Color
-    {"#EDFAF2", "#283232"}, // rgb(229, 240, 238)  Not Used anymore // Was used for BBS Combo / Dropdown focused background color
+    {"#F4F4F4", "#242428"}, // rgb(244, 244, 244)  ???
+    {"#DBDBDB", NOCTE_BORDER}, // rgb(219, 219, 219)  Input/Combo Box Border Color
+    {"#EDFAF2", "#2B2B30"}, // rgb(237, 250, 242)  Not Used anymore // Was used for BBS Combo / Dropdown focused background color
     {"#323A3C", "#E5E5E6"}, // rgb(50, 58, 60)     Text color used on search list | 
     {"#303A3C", "#E5E5E5"}, // rgb(48, 58, 60)     Object Table > Column header text color | StaticBox Border Color
-    {"#FEFFFF", "#242428"}, // rgb(254, 255, 255)  Side Tabbar bg | 
-    {"#A6A9AA", "#2D2D29"}, // rgb(166, 169, 170)  Seperator color
+    {"#FEFFFF", "#161618"}, // rgb(254, 255, 255)  Side Tabbar bg | 
+    {"#A6A9AA", "#2D2D31"}, // rgb(166, 169, 170)  Seperator color
     {"#363636", "#B2B3B5"}, // rgb(54, 54, 54)     Sidebar > Parameter Label/Title color | Sidebar tab text | Create Filament window text
     {"#F0F0F1", "#333337"}, // rgb(240, 240, 241)  Disabled element background // ORCA Used better background color for dark mode
     {"#9E9E9E", "#53545A"}, // rgb(158, 158, 158)  ???
-    {"#D7E8DE", "#1F2B27"}, // rgb(215, 232, 222)  Not Used anymore // Leftover from BBS
+    {"#D7E8DE", "#232326"}, // rgb(215, 232, 222)  Not Used anymore // Leftover from BBS
     {"#2B3436", "#808080"}, // rgb(43, 52, 54)     Not Used anymore // Leftover from BBS. Was used as main fill color of icons
     {"#ABABAB", "#ABABAB"},
     {"#D9D9D9", "#27272A"}, // rgb(217, 217, 217)  Sidebar > Toggle button track color
     {"#FFFEFE", "#D9D9D9"}, // rgb(255, 254, 254)  Sidebar > Toggle button thumb color
-    {"#EBF9F0", "#293F34"},
+    {"#EBF9F0", "#2C2C31"},
     //{"#F0F0F0", "#4C4C54"},
-    // ORCA
-    {"#BFE1DE", "#223C3C"}, // rgb(191, 225, 222)  Dropdown checked item background color > ORCA color with %25 opacity
-    {"#E5F0EE", "#283232"}, // rgb(229, 240, 238)  Combo / Dropdown focused background color > ORCA color with %10 opacity
+    // NOCTE: tints that were the ORCA colour at 25% / 10% opacity
+    {"#BFE1DE", NOCTE_SELECTION_BG},      // rgb(191, 225, 222)  Dropdown checked item background color
+    {"#E5F0EE", NOCTE_SELECTION_BG_SOFT}, // rgb(229, 240, 238)  Combo / Dropdown focused background color
+    // NOCTE accent key, added by the fork. Call sites that painted the ORCA teal directly — the
+    // top bar's pressed / hovered / checked item background (BBLTopbar.cpp) and the Plater's
+    // focus and hover borders (Plater.cpp) — emit this instead, so the accent is a neutral dark
+    // grey in light mode and a lighter neutral grey in dark mode, never a hue.
+    {"#4A4A50", "#5A5A62"},
 };
+// NOCTE-END
 
 std::tuple<double, double, double> StateColor::GetLAB(const wxColour& color) {
     // Convert color to RGB color space
