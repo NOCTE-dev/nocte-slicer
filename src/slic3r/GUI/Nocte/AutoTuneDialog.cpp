@@ -247,9 +247,8 @@ void AutoTuneDialog::on_apply()
     // One snapshot for the whole run: a tuning pass is one decision, so it is one undo step. The
     // write itself is ObjectList::add_category_to_settings_from_selection()'s sequence
     // (GUI_ObjectList.cpp:2072-2097): take_snapshot, set_key_value with a cloned option, then
-    // changed_object() and the settings-item refresh.
-    plater->take_snapshot("N\xC3\x98" "CTE auto-tune");
-
+    // changed_object() and the settings-item refresh. The snapshot is taken right before the
+    // first write, so a run that skips every recommendation leaves no empty undo step.
     int      written = 0;
     wxString skipped;
     for (size_t index : chosen) {
@@ -292,16 +291,20 @@ void AutoTuneDialog::on_apply()
             continue;
         }
 
+        if (written == 0)
+            plater->take_snapshot("N\xC3\x98" "CTE auto-tune");
         config->set_key_value(rec.key, option.release());
         ++ written;
     }
 
-    list->changed_object(m_target.obj_idx);
-    list->update_and_show_object_settings_item();
+    if (written > 0) {
+        list->changed_object(m_target.obj_idx);
+        list->update_and_show_object_settings_item();
+    }
 
-    m_committed = true;
+    m_committed = written > 0;
     if (m_btn_apply != nullptr)
-        m_btn_apply->Enable(false);
+        m_btn_apply->Enable(! m_committed);
 
     wxString status = wxString::Format(_L("Applied %d of %d settings."), written, int(chosen.size()));
     if (! skipped.IsEmpty())

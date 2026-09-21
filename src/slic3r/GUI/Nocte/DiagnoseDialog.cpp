@@ -332,6 +332,9 @@ void DiagnoseDialog::on_undo()
 
 void DiagnoseDialog::on_apply()
 {
+    if (m_committed)
+        return;
+
     std::vector<size_t> chosen;
     for (unsigned int i = 0; i < m_steps->GetCount(); ++ i)
         if (m_steps->IsChecked(i))
