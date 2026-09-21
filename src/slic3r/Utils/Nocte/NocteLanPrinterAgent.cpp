@@ -614,11 +614,13 @@ void NocteLanPrinterAgent::dispatch_local_connect(int status, const std::string&
     if (!local_fn)
         return;
 
-    auto dispatch = [status, dev_id, msg, local_fn]() { local_fn(status, dev_id, msg); };
-    if (queue_fn)
-        queue_fn(dispatch);
-    else
-        dispatch();
+    // GUI callbacks run on the GUI thread only. Without a queue function this is the io
+    // thread, and a callback that reconnects from there would join its own thread.
+    if (!queue_fn) {
+        BOOST_LOG_TRIVIAL(warning) << "nocte-lan: no queue_on_main_fn, connect status dropped";
+        return;
+    }
+    queue_fn([status, dev_id, msg, local_fn]() { local_fn(status, dev_id, msg); });
 }
 
 void NocteLanPrinterAgent::dispatch_local_message(const std::string& dev_id, const std::string& payload)
@@ -635,11 +637,11 @@ void NocteLanPrinterAgent::dispatch_local_message(const std::string& dev_id, con
 
     // Verbatim: MachineObject::parse_json("lan", msg) already speaks this dialect, and every
     // translation layer is one more place for a field to go missing.
-    auto dispatch = [dev_id, payload, local_fn]() { local_fn(dev_id, payload); };
-    if (queue_fn)
-        queue_fn(dispatch);
-    else
-        dispatch();
+    if (!queue_fn) {
+        BOOST_LOG_TRIVIAL(warning) << "nocte-lan: no queue_on_main_fn, report dropped";
+        return;
+    }
+    queue_fn([dev_id, payload, local_fn]() { local_fn(dev_id, payload); });
 }
 
 void NocteLanPrinterAgent::dispatch_printer_connected(const std::string& topic)
@@ -654,11 +656,11 @@ void NocteLanPrinterAgent::dispatch_printer_connected(const std::string& topic)
     if (!connected_fn)
         return;
 
-    auto dispatch = [topic, connected_fn]() { connected_fn(topic); };
-    if (queue_fn)
-        queue_fn(dispatch);
-    else
-        dispatch();
+    if (!queue_fn) {
+        BOOST_LOG_TRIVIAL(warning) << "nocte-lan: no queue_on_main_fn, connected event dropped";
+        return;
+    }
+    queue_fn([topic, connected_fn]() { connected_fn(topic); });
 }
 
 } // namespace Slic3r

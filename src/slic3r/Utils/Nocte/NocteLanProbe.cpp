@@ -190,7 +190,11 @@ bool build_probe_archive(std::string& out)
     ok            = ok && mz_zip_writer_finalize_heap_archive(&archive, &buffer, &size) != MZ_FALSE;
     if (ok && buffer != nullptr && size > 0)
         out.assign(static_cast<const char*>(buffer), size);
-    // Frees the heap buffer, so the copy above has to have happened already.
+    // finalize_heap_archive() hands the buffer over and clears m_pMem, so mz_zip_writer_end()
+    // does not free it: the caller owns it from here (miniz.c:7621-7624, and the same
+    // mz_free() the thumbnail code uses).
+    if (buffer != nullptr)
+        mz_free(buffer);
     mz_zip_writer_end(&archive);
     return ok && !out.empty();
 }

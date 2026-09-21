@@ -253,12 +253,20 @@ struct NocteMqttClient::Impl
 
     void start_connect()
     {
+        // start() posts this, so the drain at the top of the next start() can find a stale one
+        // still queued - after a start() whose std::thread constructor threw, run() never ran it.
+        // Without this guard the drain would open a second session on the old config, and its
+        // resolve completion would then run against the stream the new session installs.
+        if (stopping)
+            return;
         stream = std::make_unique<asio::ssl::stream<tcp::socket>>(io, ssl_context);
         // A healthy TCP + TLS + CONNACK round trip costs ~0.9 s; the budget is deliberately
         // generous for a busy machine, but a real failure is usually immediate.
         arm_deadline(config.connect_timeout_s, "CONNACK");
         resolver.async_resolve(config.host, std::to_string(config.port),
                                [this](const boost::system::error_code& ec, const tcp::resolver::results_type& results) {
+                                   if (stopping)
+                                       return; // torn down, or drained by the next start()
                                    if (ec) {
                                        fail_session("resolve failed: " + ec.message());
                                        return;
@@ -271,6 +279,8 @@ struct NocteMqttClient::Impl
     {
         asio::async_connect(stream->lowest_layer(), results,
                             [this](const boost::system::error_code& ec, const tcp::endpoint&) {
+                                if (stopping)
+                                    return;
                                 if (ec) {
                                     fail_session("connect failed: " + ec.message());
                                     return;
@@ -284,6 +294,8 @@ struct NocteMqttClient::Impl
     void do_handshake()
     {
         stream->async_handshake(asio::ssl::stream_base::client, [this](const boost::system::error_code& ec) {
+            if (stopping)
+                return;
             if (ec) {
                 fail_session("TLS handshake failed: " + ec.message());
                 return;
@@ -387,6 +399,8 @@ struct NocteMqttClient::Impl
     void read_fixed_header()
     {
         asio::async_read(*stream, asio::buffer(&header_byte, 1), [this](const boost::system::error_code& ec, std::size_t) {
+            if (stopping)
+                return;
             if (ec) {
                 fail_session("read failed: " + ec.message());
                 return;
@@ -401,6 +415,8 @@ struct NocteMqttClient::Impl
     void read_remaining_length()
     {
         asio::async_read(*stream, asio::buffer(&length_byte, 1), [this](const boost::system::error_code& ec, std::size_t) {
+            if (stopping)
+                return;
             if (ec) {
                 fail_session("read failed: " + ec.message());
                 return;
@@ -438,6 +454,8 @@ struct NocteMqttClient::Impl
     {
         asio::async_read(*stream, asio::buffer(&body[0], body.size()),
                          [this](const boost::system::error_code& ec, std::size_t) {
+                             if (stopping)
+                                 return;
                              if (ec) {
                                  fail_session("read failed: " + ec.message());
                                  return;
@@ -618,6 +636,19 @@ bool NocteMqttClient::start(const MqttConfig& config)
     stop();
 
     Impl* impl = m_impl.get();
+
+    // The previous session's thread is joined by now, so this is single-threaded again.
+    //
+    // io_context::stop() does NOT discard queued handlers: everything the last session left
+    // behind - its cancelled read and write completions, and the shutdown stop() posts when the
+    // context has already stopped - is still in the queue and would run as the first thing this
+    // session's thread sees. That tore the new session down before start_connect() ever ran.
+    // Drain them here instead, with `stopping` still set so that every one of them is a no-op.
+    impl->stopping = true;
+    impl->io.restart();
+    impl->io.poll();
+    impl->io.restart();
+
     impl->config    = config;
     impl->client_id = make_client_id();
     impl->connack_rc.store(MqttConnackTransportFailure);
@@ -642,12 +673,18 @@ bool NocteMqttClient::start(const MqttConfig& config)
 
     try {
         impl->thread = std::thread([impl]() {
-            try {
-                impl->io.run();
-            } catch (const std::exception& e) {
-                BOOST_LOG_TRIVIAL(error) << impl->tag() << "io_context terminated: " << e.what();
-            } catch (...) {
-                BOOST_LOG_TRIVIAL(error) << impl->tag() << "io_context terminated";
+            // A handler that throws unwinds out of run() but leaves the context runnable, so
+            // keep running it: otherwise the session would look connected with no thread
+            // behind it. The loop ends when run() returns normally (context stopped).
+            for (;;) {
+                try {
+                    impl->io.run();
+                    break;
+                } catch (const std::exception& e) {
+                    BOOST_LOG_TRIVIAL(error) << impl->tag() << "handler threw: " << e.what();
+                } catch (...) {
+                    BOOST_LOG_TRIVIAL(error) << impl->tag() << "handler threw";
+                }
             }
         });
     } catch (const std::system_error& e) {
