@@ -21,6 +21,7 @@ import sys
 
 # Upstream files the fork is allowed to edit. Each must carry a NOCTE-BEGIN marker (ADR-001).
 UPSTREAM_TOUCH_POINTS = (
+    # ADR-001: build lists, the 3mf writer, GUI entry points, the printer-agent registry.
     "version.inc",
     "CMakeLists.txt",
     "src/libslic3r/CMakeLists.txt",
@@ -34,6 +35,24 @@ UPSTREAM_TOUCH_POINTS = (
     "src/OrcaSlicer.cpp",
     "src/slic3r/Utils/NetworkAgentFactory.cpp",
     "src/slic3r/Utils/NetworkAgentFactory.hpp",
+    # ADR-003: offline by default, product identity, executable rename. Palette files take
+    # value-only edits; the other files take small marked hunks whose logic lives in GUI/Nocte/.
+    "src/slic3r/GUI/GUI_App.cpp",
+    "src/libslic3r/AppConfig.cpp",
+    "src/libslic3r/libslic3r.h",
+    "src/slic3r/GUI/Preferences.cpp",
+    "src/slic3r/GUI/Widgets/StateColor.cpp",
+    "src/libslic3r/Color.hpp",
+    "src/slic3r/GUI/ImGuiWrapper.cpp",
+    "src/slic3r/GUI/BitmapCache.cpp",
+    "src/slic3r/GUI/GLTexture.cpp",
+    "src/slic3r/GUI/GLCanvas3D.cpp",
+    "src/slic3r/GUI/BBLTopbar.cpp",
+    "src/slic3r/GUI/WebGuideDialog.cpp",
+    "src/CMakeLists.txt",
+    "src/dev-utils/platform/msw/OrcaSlicer.rc.in",
+    "scripts/run_gettext.bat",
+    "scripts/test_build_win.ps1",
 )
 
 # Directories the fork owns outright. No marker is required inside them.

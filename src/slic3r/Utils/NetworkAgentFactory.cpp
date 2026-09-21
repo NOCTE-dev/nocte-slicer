@@ -176,55 +176,26 @@ void NetworkAgentFactory::register_all_agents()
                                             // for K-series boards with CFS support.
     register_agent<MoonrakerPrinterAgent>();
 
-    // Keep BBL as a built-in option. Python printer-agent plugins with the
-    // same AgentInfo ID are listed separately under the plugin registry key.
-    {
-        auto info = BBLPrinterAgent::get_agent_info_static();
-        register_printer_agent(info.id, info.name,
-                               [](std::shared_ptr<ICloudServiceAgent> cloud_agent,
-                                  const std::string& /*log_dir*/) -> std::shared_ptr<IPrinterAgent> {
-                                   auto agent = std::make_shared<BBLPrinterAgent>();
-                                   if (cloud_agent)
-                                       agent->set_cloud_agent(cloud_agent);
-                                   return agent;
-                               });
-    }
+    // NOCTE-BEGIN nocte-offline
+    // Upstream registers BBLPrinterAgent here: a thunk layer over Bambu's proprietary network
+    // plugin, which NØCTE Slicer never ships or loads (ADR-002, ADR-003). Bambu Lab printers are
+    // served by the NØCTE LAN Developer Mode agent, registered below once it exists.
+    // NOCTE-END
 }
 
 std::unique_ptr<NetworkAgent> create_agent_from_config(const std::string& log_dir, AppConfig* app_config)
 {
-    if (!app_config)
-        return std::make_unique<NetworkAgent>(nullptr, nullptr);
-
-    // Always create Orca cloud agent as the primary provider
-    auto cloud_agent = NetworkAgentFactory::create_cloud_agent(ORCA_CLOUD_PROVIDER, log_dir);
-    if (!cloud_agent) {
-        BOOST_LOG_TRIVIAL(error) << "Failed to create cloud agent";
-    }
-
-    auto agent = std::make_unique<NetworkAgent>(std::move(cloud_agent), nullptr);
-
-    if (agent) {
-        // create orca cloud agent first
-        auto* orca_cloud = dynamic_cast<OrcaCloudServiceAgent*>(agent->get_cloud_agent().get());
-        if (orca_cloud) {
-            orca_cloud->configure_urls(app_config);
-        }
-
-        // Initialize third-party cloud agents from config
-        auto providers = app_config->get_cloud_providers();
-        for (const auto& provider : providers) {
-            if (provider == ORCA_CLOUD_PROVIDER)
-                continue; // Primary agent already created above
-            auto third_party_agent = NetworkAgentFactory::create_cloud_agent(provider, log_dir);
-            if (third_party_agent) {
-                agent->add_cloud_agent(provider, std::move(third_party_agent));
-                BOOST_LOG_TRIVIAL(info) << "Initialized third-party cloud agent: " << provider;
-            }
-        }
-    }
-
-    return agent;
+    // NOCTE-BEGIN nocte-offline
+    // NØCTE Slicer is offline by default (ADR-003): no accounts, no Orca Cloud, no Bambu cloud.
+    // Upstream always creates the Orca cloud agent here and adds the providers listed in the
+    // config. A NetworkAgent without a cloud agent is a valid object whose cloud methods are all
+    // null-guarded no-ops, so every login, sync and token path degrades to "not logged in"
+    // without touching its callers.
+    (void) log_dir;
+    (void) app_config;
+    BOOST_LOG_TRIVIAL(info) << "NOCTE: offline build, no cloud agent created";
+    return std::make_unique<NetworkAgent>(nullptr, nullptr);
+    // NOCTE-END
 }
 
 void NetworkAgentFactory::register_python_plugin(const std::string& plugin_key)
