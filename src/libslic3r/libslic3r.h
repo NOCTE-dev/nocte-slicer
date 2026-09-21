@@ -2,10 +2,19 @@
 #define _libslic3r_h_
 
 #include "libslic3r_version.h"
-#define SLIC3R_APP_FULL_NAME "Orca Slicer"
-#define GCODEVIEWER_APP_NAME "OrcaSlicer G-code Viewer"
-#define GCODEVIEWER_APP_KEY  "OrcaSlicerGcodeViewer"
-#define GCODEVIEWER_BUILD_ID std::string("OrcaSlicer G-code Viewer-") + std::string(SLIC3R_VERSION) + std::string("-RC")
+// NOCTE-BEGIN nocte-rename
+// ADR-003 section 3. ASCII only: the consumers build a wxString from the narrow literal without
+// a UTF-8 conversion (wxString(SLIC3R_APP_FULL_NAME) in CreatePresetsDialog.cpp:1054 and its
+// siblings, std::string in OrcaSlicer.cpp:1339 and Config.cpp:1411), so a UTF-8 "NOCTE" with the
+// slashed O would be decoded in the current 8-bit locale and render as mojibake. The places that
+// show the real "NØCTE Slicer" go through from_u8()/_L() and are handled where they live.
+// GCODEVIEWER_APP_KEY names <key>.conf in the data directory (AppConfig::config_path), so it
+// moves with SLIC3R_APP_KEY.
+#define SLIC3R_APP_FULL_NAME "NOCTE Slicer"
+#define GCODEVIEWER_APP_NAME "NOCTE Slicer G-code Viewer"
+#define GCODEVIEWER_APP_KEY  "NocteSlicerGcodeViewer"
+#define GCODEVIEWER_BUILD_ID std::string("NOCTE Slicer G-code Viewer-") + std::string(SLIC3R_VERSION) + std::string("-RC")
+// NOCTE-END
 
 // this needs to be included early for MSVC (listing it in Build.PL is not enough)
 #include <memory>
