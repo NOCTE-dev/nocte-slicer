@@ -9,7 +9,9 @@ let $content;
 // own page. Add an id to this list to enable another vendor. The id is the one the C++ side
 // sends in each model entry's "vendor" field (WebGuideDialog.cpp, BuildProfileJson:
 // entry["vendor"] = vp.id, and LoadProfileFamily: OneModel["vendor"] = strVendor).
-const NOCTE_VENDORS = ["BBL"];
+// "Custom" is not a vendor but the user-defined printer entry; without it a user with no
+// Bambu Lab printer has no way past this page.
+const NOCTE_VENDORS = ["BBL", "Custom"];
 
 function NocteFilterVendors( aModels )
 {

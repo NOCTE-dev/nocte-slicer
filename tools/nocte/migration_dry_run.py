@@ -53,6 +53,8 @@ DROPPED_APP_CONFIG_KEYS = (
     "enable_ota",
     "sync_system_preset",
     "sync_user_preset",
+    "stealth_mode",
+    "hide_login_side_panel",
     "user_id",
     "dark_color_mode",
 )

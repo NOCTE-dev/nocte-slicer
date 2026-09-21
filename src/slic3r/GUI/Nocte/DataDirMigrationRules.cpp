@@ -66,7 +66,7 @@ bool is_dropped_app_config_key(const std::string &key)
         // Cloud and network plugin (ADR-002, ADR-003 §1). The preset-sync switches come across
         // enabled from an OrcaSlicer that was logged in; the fork's own defaults apply instead.
         "cloud_providers", "installed_networking", "use_printer_agents", "enable_ota",
-        "sync_system_preset", "sync_user_preset",
+        "sync_system_preset", "sync_user_preset", "stealth_mode", "hide_login_side_panel",
         // Session identity. The tokens themselves live in the keychain, not here, but a stale
         // user id would make the app look logged in.
         "user_id",
