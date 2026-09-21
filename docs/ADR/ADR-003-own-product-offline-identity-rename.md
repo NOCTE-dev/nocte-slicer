@@ -52,7 +52,7 @@ The following upstream files join `tools/nocte/check_touchpoints.py`, each with 
 | `src/libslic3r/AppConfig.cpp` | empty version and profile URLs; offline and dark defaults | one defaults block and two constants |
 | `src/libslic3r/libslic3r.h` | `SLIC3R_APP_FULL_NAME` and the gcode-viewer names | one hunk, in the rename commit |
 | `src/slic3r/GUI/Preferences.cpp` | removal of the Online tab | deletions only |
-| `src/slic3r/GUI/Widgets/StateColor.cpp`, `src/libslic3r/Color.hpp`, `src/slic3r/GUI/ImGuiWrapper.cpp`, `src/slic3r/GUI/GLTexture.cpp`, `src/slic3r/GUI/GLCanvas3D.cpp`, `src/slic3r/GUI/BBLTopbar.cpp` | the palette | colour values only, no logic |
+| `src/slic3r/GUI/Widgets/StateColor.cpp`, `src/libslic3r/Color.hpp`, `src/slic3r/GUI/ImGuiWrapper.cpp`, `src/slic3r/GUI/GLTexture.cpp`, `src/slic3r/GUI/GLCanvas3D.cpp`, `src/slic3r/GUI/BBLTopbar.cpp`, `src/slic3r/GUI/Widgets/WebViewHostDialog.cpp` | the palette (the last one injects the accent into the hosted web dialogs) | colour values only, no logic |
 | `src/slic3r/GUI/BitmapCache.cpp` | SVG recolouring at load | two map entries |
 | `src/slic3r/GUI/WebGuideDialog.cpp` | removal of the plugin page of the wizard | deletions only |
 | `src/CMakeLists.txt`, `src/libslic3r/libslic3r_version.h.in`, `src/dev-utils/platform/msw/OrcaSlicer.rc.in`, `src/slic3r/Utils/Process.cpp`, `scripts/run_gettext.bat`, `scripts/run_gettext.sh`, `scripts/HintsToPot.py`, `scripts/test_build_win.ps1` | launcher name, runtime key, version resource, new-instance file name, catalog names, CI gate | integrator only |

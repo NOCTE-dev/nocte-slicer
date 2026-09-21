@@ -12992,10 +12992,11 @@ void Plater::priv::on_tab_selection_changing(wxBookCtrlEvent& e)
         if (!use_printer_agents && wxGetApp().preset_bundle->is_bbl_vendor() && !Slic3r::NetworkAgent::is_network_module_loaded()) {
             e.Veto();
             BOOST_LOG_TRIVIAL(info) << boost::format("skipped tab switch from %1% to %2%, lack of network plugins") % old_sel % new_sel;
-            if (q) {
-                wxCommandEvent* evt = new wxCommandEvent(EVT_INSTALL_PLUGIN_HINT);
-                wxQueueEvent(q, evt);
-            }
+                // NOCTE-BEGIN nocte-offline
+                // ADR-003: NØCTE never prompts for the Bambu network plug-in, so the veto is
+                // silent. This path is unreachable anyway while the Device tab is not added
+                // (MainFrame hunk 1.3), but the veto must stay in case it is re-added.
+                // NOCTE-END
         }
     } else {
         // Pointer test, not a name lookup: in printer-agents mode this page is TAB_ID_MONITOR_WEB
@@ -13228,7 +13229,11 @@ void Plater::priv::update_plugin_when_launch(wxCommandEvent &event)
 
 void Plater::priv::show_install_plugin_hint(wxCommandEvent &event)
 {
-    notification_manager->bbl_show_plugin_install_notification(into_u8(_L("The network plug-in was not detected. Network related features are unavailable.")));
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: no network plug-in is ever expected, so there is nothing to notify about. The
+    // handler and its EVT_INSTALL_PLUGIN_HINT binding stay so the event type keeps a consumer.
+    (void) event;
+    // NOCTE-END
 }
 
 void Plater::priv::show_preview_only_hint(wxCommandEvent &event)
@@ -14115,6 +14120,13 @@ void Plater::priv::update_publish_dialog_status(wxString &msg, int percent)
 
 bool Plater::priv::show_publish_dlg(bool show)
 {
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: publishing a model to a cloud gallery is not a NØCTE feature. PublishSettingsDialog
+    // is a *local* export dialog and is untouched; only this uploader entry point is closed.
+    (void) show;
+    return false;
+    // NOCTE-END
+
     if (q != nullptr) { BOOST_LOG_TRIVIAL(debug) << __FUNCTION__ << ":recevied publish event\n"; }
 
     if (!m_publish_dlg) m_publish_dlg = new PublishDialog(q);
@@ -19824,7 +19836,11 @@ void Plater::send_job_finished(wxCommandEvent& evt)
 
 void Plater::publish_job_finished(wxCommandEvent &evt)
 {
-    p->m_publish_dlg->EndModal(wxID_OK);
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: show_publish_dlg() returns early, so m_publish_dlg is never constructed.
+    if (p->m_publish_dlg)
+        p->m_publish_dlg->EndModal(wxID_OK);
+    // NOCTE-END
    // GUI::wxGetApp().load_url(evt.GetString());
    //GUI::wxGetApp().open_publish_page_dialog(evt.GetString());
 }
@@ -21411,19 +21427,21 @@ bool Plater::refresh_missing_plugin_block(bool* block_toggled)
     const std::vector<std::string> missing_cloud_refs = missing_refs(missing_cloud);
     const std::vector<std::string> missing_local_refs = missing_refs(missing_local);
 
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: the notification stays (the preset really does need a plugin) but the "Find on
+    // OrcaCloud" action is removed — NØCTE opens no browser to a plugin marketplace. Same for
+    // "Install Plugins", which downloads and installs from the plugin registry.
     update(NotificationType::OrcaCloudPluginMissingError, missing_cloud,
            &p->m_cloud_missing_shown_sig,
            _u8L("OrcaCloud plugins required by the current preset are not installed:"),
-           _u8L("Install Plugins"),
-           [this, missing_cloud_refs](wxEvtHandler*) { install_missing_cloud_plugins(missing_cloud_refs); return false; });
-    // "Find on OrcaCloud" is only a suggestion: it opens the browser but cannot resolve the missing
-    // plugin in-session, so it never closes the notification or unblocks slicing. The user resolves a
-    // local plugin by installing it or by changing the setting that needs it.
+           "",
+           [](wxEvtHandler*) { return false; });
     update(NotificationType::OrcaLocalPluginMissingError, missing_local,
            &p->m_local_missing_shown_sig,
            _u8L("Local plugins required by the current preset are missing:"),
-           _u8L("Find on OrcaCloud"),
-           [missing_local_refs](wxEvtHandler*) { open_missing_plugins_on_cloud(missing_local_refs); return false; });
+           "",
+           [](wxEvtHandler*) { return false; });
+    // NOCTE-END
 
     const std::vector<MissingPlugin> inactive      = get_inactive_plugins();
     const std::vector<MissingPlugin> broken        = get_broken_plugins();
@@ -21435,11 +21453,16 @@ bool Plater::refresh_missing_plugin_block(bool* block_toggled)
            _u8L("Plugins required by the current preset are not activated:"),
            _u8L("Activate Now"),
            [this, inactive_refs](wxEvtHandler*) { enable_inactive_plugins(inactive_refs); return false; });
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: the notification stays (the preset really does need a plugin) but the "Find on
+    // OrcaCloud" action is removed — NØCTE opens no browser to a plugin marketplace.
+    // _u8L("Activate Now") above is purely local and stays.
     update(NotificationType::OrcaPluginCapabilityUnavailableError, broken,
            &p->m_broken_shown_sig,
            _u8L("The installed plugin does not provide the required capability — it may be outdated:"),
-           _u8L("Find on OrcaCloud"),
-           [broken_refs](wxEvtHandler*) { open_missing_plugins_on_cloud(broken_refs); return false; });
+           "",
+           [](wxEvtHandler*) { return false; });
+    // NOCTE-END
 
     const bool blocked = has_missing_plugins() || has_inactive_plugins() || has_broken_plugins();
     if (block_toggled)

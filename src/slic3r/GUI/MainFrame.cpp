@@ -500,7 +500,11 @@ DPIFrame(NULL, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, BORDERLESS_FRAME_
         m_tabpanel->SelectPageByName(evt.GetString());
     });
 
-    Bind(EVT_SYNC_CLOUD_PRESET, &MainFrame::on_select_default_preset, this);
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: nothing synchronises presets from a cloud, so the "Do you want to synchronize your
+    // personal data from Orca Cloud?" dialog is never raised. on_select_default_preset() and
+    // show_sync_dialog() stay defined (MainFrame.hpp:301,303 declare them) but are unbound.
+    // NOCTE-END
 
 //    Bind(wxEVT_MENU,
 //        [this](wxCommandEvent&)
@@ -1319,9 +1323,17 @@ void MainFrame::init_tabpanel() {
     create_preset_tabs();
 
         //BBS add pages
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: the Device tab stays hidden until the NØCTE LAN agent (ADR-002) can show live
+    // printer state. The panel is still constructed — show_device() and every m_monitor-> user
+    // (msw_rescale, on_sys_color_changed, jump_to_monitor) assume a non-null pointer — it is
+    // simply never added to the tab panel.
     m_monitor = new MonitorPanel(m_tabpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
     m_monitor->SetBackgroundColour(*wxWHITE);
-    m_tabpanel->AddPage(TAB_ID_MONITOR, m_monitor, _L("Device"), "tab_monitor_active");
+    // Not a notebook page any more, so nothing hides it for us: same treatment as m_printer_view
+    // below, which is likewise a child of m_tabpanel without being one of its pages.
+    m_monitor->Hide();
+    // NOCTE-END
 
     m_printer_view = new PrinterWebView(m_tabpanel);
     Bind(EVT_LOAD_PRINTER_URL, [this](LoadPrinterViewEvent &evt) {
@@ -1332,20 +1344,22 @@ void MainFrame::init_tabpanel() {
     });
     m_printer_view->Hide();
 
-    if (wxGetApp().is_enable_multi_machine()) {
-        m_multi_machine = new MultiMachinePage(m_tabpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
-        m_multi_machine->SetBackgroundColour(*wxWHITE);
-        // TODO: change the bitmap
-        m_tabpanel->AddPage(TAB_ID_MULTI_DEVICE, m_multi_machine, _L("Multi-device"), "tab_multi_active");
-    }
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: no Multi-device tab. `enable_multi_machine` is false by default and its Preferences
+    // toggle was removed (Preferences.cpp), so m_multi_machine simply stays null; every user of it
+    // is null-guarded (MainFrame.cpp:2577, :3982, :4387).
+    // NOCTE-END
 
     m_project = new ProjectPanel(m_tabpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
     m_project->SetBackgroundColour(*wxWHITE);
     m_tabpanel->AddPage(TAB_ID_PROJECT, m_project, _L("Project"), "tab_auxiliary_active");
 
-    m_calibration = new CalibrationPanel(m_tabpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
-    m_calibration->SetBackgroundColour(*wxWHITE);
-    m_tabpanel->AddPage(TAB_ID_CALIBRATION, m_calibration, _L("Calibration"), "tab_calibration_active");
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: the device-calibration tab needs a connected printer, so it stays hidden with the
+    // Device tab. The Calibration *menu* (temperature tower, flow rate, pressure advance) is a
+    // slicer feature and is untouched. m_calibration stays null; MainFrame.cpp:2579, :2644 and
+    // :4034 all null-check it.
+    // NOCTE-END
 
     // Plugin pages are appended after the built-in tabs; their ids are namespaced
     // (plugin.<plugin_key>.<name>) so they can't collide with the built-in TAB_ID_* constants.
@@ -1367,6 +1381,13 @@ void MainFrame::init_tabpanel() {
 
 // SoftFever
 void MainFrame::show_device(bool should_use_native) {
+    // NOCTE-BEGIN nocte-offline
+    // No Device tab until the NØCTE LAN agent can show live printer state (ADR-003 section 1).
+    // The constructor no longer adds the page; this is the only place that would re-insert it
+    // when a printer preset is selected, so it returns before touching the notebook.
+    (void) should_use_native;
+    return;
+    // NOCTE-END
     auto idx = -1;
 
     const bool use_printer_agents = wxGetApp().app_config->get_bool("use_printer_agents");
@@ -2694,10 +2715,11 @@ static wxMenu* generate_help_menu()
     append_menu_item(helpMenu, wxID_ANY, _L("Troubleshoot Center"), "",
         [](wxCommandEvent&) { wxGetApp().troubleshoot(); });
 
-    append_menu_item(helpMenu, wxID_ANY, _L("Open Network Test"), _L("Open Network Test"), [](wxCommandEvent&) {
-            NetworkTestDialog dlg(wxGetApp().mainframe);
-            dlg.ShowModal();
-        });
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: NØCTE Slicer opens no outbound socket, so there is nothing for a network test to
+    // test and no release feed to check. "Open Network Test" and "Check for Updates" are removed;
+    // "Troubleshoot Center" and "Show Tip of the Day" stay.
+    // NOCTE-END
 
     helpMenu->AppendSeparator();
 
@@ -2711,14 +2733,6 @@ static wxMenu* generate_help_menu()
     //    [](wxCommandEvent&) {
     //        //TODO
     //    });
-    // Check New Version
-    append_menu_item(helpMenu, wxID_ANY, _L("Check for Updates"), _L("Check for Updates"),
-        [](wxCommandEvent&) {
-            wxGetApp().check_new_version_sf(true, 1);
-        }, "", nullptr, []() {
-            return true;
-        });
-
     // About
 #ifndef __APPLE__
     wxString about_title = wxString::Format(_L("&About %s"), SLIC3R_APP_FULL_NAME);
@@ -3327,23 +3341,11 @@ void MainFrame::init_menubar_as_editor()
         },
         "", nullptr, []() { return true; }, this);
 
-    append_menu_item(
-        top_menu, wxID_ANY, _L("Sync Presets"), _L("Pull and apply the latest presets from OrcaCloud"),
-        [this](wxCommandEvent&) {
-            if (!wxGetApp().is_user_login()) {
-                MessageDialog info_dlg(this, _L("You must be logged in to sync presets from cloud."),
-                    _L("Sync Presets"), wxOK | wxICON_INFORMATION);
-                info_dlg.ShowModal();
-                return;
-            }
-            if (m_plater)
-                m_plater->get_notification_manager()->push_notification(
-                    into_u8(_L("Syncing presets from cloud\u2026")));
-            wxGetApp().restart_sync_user_preset();
-        }, "", nullptr,
-        []() {
-            return wxGetApp().is_user_login() && !wxGetApp().app_config->get_stealth_mode();
-        }, this);
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: there is no cloud account and no preset synchronisation, so "Sync Presets" is
+    // removed. Its enable predicate was `is_user_login() && !get_stealth_mode()`, which is
+    // permanently false now anyway — the entry is removed rather than left greyed out.
+    // NOCTE-END
 
     top_menu->AppendSeparator();
     append_menu_item(
@@ -3485,23 +3487,11 @@ void MainFrame::init_menubar_as_editor()
         },
         "", nullptr, []() { return true; }, this);
 
-    append_menu_item(
-        fileMenu, wxID_ANY, _L("Sync Presets"), _L("Pull and apply the latest presets from OrcaCloud"),
-        [this](wxCommandEvent&) {
-            if (!wxGetApp().is_user_login()) {
-                MessageDialog info_dlg(this, _L("You must be logged in to sync presets from cloud."),
-                    _L("Sync Presets"), wxOK | wxICON_INFORMATION);
-                info_dlg.ShowModal();
-                return;
-            }
-            if (m_plater)
-                m_plater->get_notification_manager()->push_notification(
-                    into_u8(_L("Syncing presets from cloud\u2026")));
-            wxGetApp().restart_sync_user_preset();
-        }, "", nullptr,
-        []() {
-            return wxGetApp().is_user_login() && !wxGetApp().app_config->get_stealth_mode();
-        }, this);
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: there is no cloud account and no preset synchronisation, so "Sync Presets" is
+    // removed. Its enable predicate was `is_user_login() && !get_stealth_mode()`, which is
+    // permanently false now anyway — the entry is removed rather than left greyed out.
+    // NOCTE-END
 
     fileMenu->AppendSeparator();
     append_menu_item(

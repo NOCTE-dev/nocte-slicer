@@ -1004,32 +1004,11 @@ void GUI_App::post_init()
         });
     }
 
-    // Orca: notify users upgrading from a pre-2.4.0 version that profile syncing
-    // moved from Bambu Cloud to Orca Cloud.
-    if (is_editor() && m_last_config_version && m_last_config_version->valid()
-        && *m_last_config_version < Semver(2, 4, 0)) {
-        CallAfter([] {
-            const wxString wiki_url = "https://www.orcaslicer.com/wiki/user_profiles/user_profiles.html#profiles-missing-after-updating-from-bambu-cloud";
-            MessageDialog dlg(nullptr,
-                _L("Since version 2.4.0, OrcaSlicer syncs user profiles through Orca Cloud instead of Bambu Cloud.\n\n"
-                   "To migrate your existing profiles, log in to Orca Cloud and they will be transferred automatically. "
-                   "To learn more about how OrcaSlicer stores and syncs your profiles, or to migrate your presets manually, check out our wiki.\n\n"
-                   "If you did not use Bambu Cloud to sync profiles, this change does not affect you and you can safely ignore this message."),
-                _L("Profile syncing change"),
-                wxOK,
-                "",
-                _L("Learn more"),
-                [wiki_url](const wxString &) { wxLaunchDefaultBrowser(wiki_url); });
-            // Hack: the "Learn more" link renders the message in a wxHtmlWindow whose
-            // height is underestimated for multi-paragraph text, leaving a scrollbar.
-            // The html sits in a proportion-1 sizer chain, so grow the dialog (never
-            // shrink it below its content width) to give the text enough room.
-            const wxSize sz = dlg.GetSize();
-            dlg.SetSize(std::max(sz.x, dlg.FromDIP(280)), std::max(sz.y, dlg.FromDIP(200)));
-            dlg.CenterOnParent();
-            dlg.ShowModal();
-        });
-    }
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: the "profile syncing moved from Bambu Cloud to Orca Cloud" notice describes a
+    // migration between two clouds NØCTE Slicer has never used, and its "Learn more" button
+    // opened orcaslicer.com. There is no first-run network notice.
+    // NOCTE-END
 
     if(!m_networking_need_update && m_agent) {
         m_agent->set_on_ssdp_msg_fn(
@@ -1951,6 +1930,12 @@ bool GUI_App::has_network_update_available() const
 
 void GUI_App::show_network_plugin_download_dialog(bool is_update)
 {
+    // NOCTE-BEGIN nocte-offline
+    // ADR-002/ADR-003: NØCTE never ships, downloads or prompts for BambuNetworkLibrary.
+    (void) is_update;
+    return;
+    // NOCTE-END
+
     auto load_error = Slic3r::NetworkAgent::get_load_error();
 
     NetworkPluginDownloadDialog::Mode mode;
@@ -4728,6 +4713,11 @@ if (res) {
 }
 
 void GUI_App::ShowDownNetPluginDlg() {
+    // NOCTE-BEGIN nocte-offline
+    // ADR-002/ADR-003: no plug-in download. W1 already removed the wizard's only call site
+    // (WebGuideDialog.cpp, "user_guide_finish").
+    return;
+    // NOCTE-END
     try {
         auto iter = std::find_if(dialogStack.begin(), dialogStack.end(), [](auto dialog) {
             return dynamic_cast<DownloadProgressDialog *>(dialog) != nullptr;
@@ -4743,6 +4733,16 @@ void GUI_App::ShowDownNetPluginDlg() {
 
 void GUI_App::ShowUserLogin(bool show, const std::string& provider)
 {
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: no account, no login dialog. This is the single funnel: request_login()
+    // (GUI_App.cpp:4950) calls straight into here, check_login() (:4994) asks the agent, whose
+    // cloud methods are null-guarded no-ops and answer "not logged in", and request_user_login()
+    // (:5015) posts EVT_USER_LOGIN whose handler goes through the same agent. None of them needs
+    // its own hunk.
+    (void) show; (void) provider;
+    return;
+    // NOCTE-END
+
     // Show user Login Dialog for specified cloud
     if (show) {
         try {
@@ -5138,29 +5138,14 @@ std::string GUI_App::handle_web_request(std::string cmd)
                 });
                 return "";
             }
-            if (app_config->get_stealth_mode() && stealth_blocked_login_commands.count(command_str)) {
-                CallAfter([this, command_str] {
-                    MessageDialog dlg(mainframe,
-                        _L("You are currently in Stealth Mode. To log into the Cloud, you need to disable Stealth Mode first."),
-                        _L("Stealth Mode"),
-                        wxOK | wxCANCEL | wxCENTRE);
-                    dlg.SetButtonLabel(wxID_OK, _L("Quit Stealth Mode"));
-                    if (dlg.ShowModal() == wxID_OK) {
-                        app_config->set_bool("stealth_mode", false);
-                        app_config->save();
-                        if (mainframe && mainframe->m_webview)
-                            mainframe->m_webview->SendCloudProvidersInfo();
-                        // Continue with login
-                        if (command_str == "homepage_login_or_register")
-                            this->request_login(true);
-                        else if (command_str == "homepage_orca_login_or_register")
-                            this->request_login(true, ORCA_CLOUD_PROVIDER);
-                        else if (command_str == "homepage_bambu_login_or_register")
-                            this->request_login(true, BBL_CLOUD_PROVIDER);
-                    }
-                });
+            // NOCTE-BEGIN nocte-offline
+            // ADR-003: stealth mode is the permanent state of NØCTE Slicer — it defaults to true
+            // (AppConfig.cpp) and has no Preferences toggle. The dialog that offered to turn it
+            // off ("Quit Stealth Mode") is removed; a login command from the web page is simply
+            // swallowed, exactly like the info commands handled just above.
+            if (app_config->get_stealth_mode() && stealth_blocked_login_commands.count(command_str))
                 return "";
-            }
+            // NOCTE-END
             if (command_str.compare("request_project_download") == 0) {
                 if (root.get_child_optional("data") != boost::none) {
                     pt::ptree data_node = root.get_child("data");
@@ -6073,6 +6058,15 @@ void maybe_attach_updater_signature(Http& http, const std::string& canonical_que
 
 void GUI_App::check_new_version_sf(bool show_tips, int by_user)
 {
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: NØCTE never checks for updates. AppConfig::version_check_url() is "" now, but this
+    // function would still build "?iid=…" onto it and call Http::get(), so the early return is
+    // what actually keeps the socket closed. Callers: the Help menu entry (removed, hunk 1.1) and
+    // the unguarded call in GUI_App::post_init (GUI_App.cpp:999).
+    (void) show_tips; (void) by_user;
+    return;
+    // NOCTE-END
+
     AppConfig* app_config = wxGetApp().app_config;
     bool       check_stable_only = app_config->get_bool("check_stable_update_only");
     auto version_check_url = app_config->version_check_url();
@@ -9075,6 +9069,12 @@ void GUI_App::load_url(wxString url)
 
 void GUI_App::open_mall_page_dialog()
 {
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: no model marketplace. Live callers: GUI_App.cpp:5194 (a webview command) and
+    // MainFrame.cpp:2752 (inside add_common_publish_menu_items, whose call site is commented out).
+    return;
+    // NOCTE-END
+
     std::string host_url;
     std::string model_url;
     std::string link_url;
@@ -9117,6 +9117,11 @@ void GUI_App::open_mall_page_dialog()
 
 void GUI_App::open_publish_page_dialog()
 {
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: no model marketplace. Live caller: BBLTopbar.cpp:491.
+    return;
+    // NOCTE-END
+
     std::string host_url;
     std::string model_url;
     std::string link_url;

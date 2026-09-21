@@ -48,6 +48,7 @@ UPSTREAM_TOUCH_POINTS = (
     "src/slic3r/GUI/GLTexture.cpp",
     "src/slic3r/GUI/GLCanvas3D.cpp",
     "src/slic3r/GUI/BBLTopbar.cpp",
+    "src/slic3r/GUI/Widgets/WebViewHostDialog.cpp",
     "src/slic3r/GUI/WebGuideDialog.cpp",
     "src/CMakeLists.txt",
     "src/libslic3r/libslic3r_version.h.in",
