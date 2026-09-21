@@ -1719,10 +1719,11 @@ void PreferencesDialog::create_items()
     g_sizer->Add(item_shared_profiles);
 
     //// GENERAL > Features
-    g_sizer->Add(create_item_title(_L("Features")), 1, wxEXPAND);
-
-    auto item_multi_machine    = create_item_checkbox(_L("Multi device management"), _L("With this option enabled, you can send a task to multiple devices at the same time and manage multiple devices."), "enable_multi_machine", _L("(Requires restart)"));
-    g_sizer->Add(item_multi_machine);
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: the Multi-device tab stays hidden until the NØCTE LAN agent can show live printer
+    // state, so the "Multi device management" toggle (and the otherwise empty Features section
+    // heading) is removed.
+    // NOCTE-END
 
 #if 0
     g_sizer->Add(create_item_title(_L("Filament Grouping")), 1, wxEXPAND);
@@ -1954,78 +1955,14 @@ void PreferencesDialog::create_items()
     g_sizer->AddSpacer(FromDIP(10));
     sizer_page->Add(g_sizer, 0, wxEXPAND);
 
-    //////////////////////////
-    //// ONLINE TAB
-    /////////////////////////////////////
-    m_pref_tabs->AppendItem(_L("Online"));
-    f_sizers.push_back(new wxFlexGridSizer(1, 1, v_gap, 0));
-    g_sizer = f_sizers.back();
-    g_sizer->AddGrowableCol(0, 1);
-
-    //// ONLINE > Connection
-    g_sizer->Add(create_item_title(_L("Connection")), 1, wxEXPAND);
-
-    auto item_region           = create_item_region_combobox(_L("Login region"), "");
-    g_sizer->Add(item_region);
- 
-    auto item_stealth_mode     = create_item_checkbox(_L("Stealth mode"), _L("This disables all cloud features, including Orca Cloud profile syncing. Users who prefer to work entirely offline can enable this option.\nNote: When Stealth Mode is enabled, your user profiles will not be backed up to Orca Cloud."), "stealth_mode");
-    g_sizer->Add(item_stealth_mode);
-
-    auto item_hide_login_side_panel = create_item_checkbox(_L("Hide login side panel"), _L("Hide the login side panel on the home page."), "hide_login_side_panel");
-    g_sizer->Add(item_hide_login_side_panel);
-
-    auto item_network_test     = create_item_button(_L("Network test"), _L("Test") + " " + dots, "", _L("Open Network Test"), []() {
-        NetworkTestDialog dlg(wxGetApp().mainframe);
-        dlg.ShowModal();
-    });
-    g_sizer->Add(item_network_test);
-
-    //// ONLINE > Cloud Providers
-    g_sizer->Add(create_item_title(_L("Cloud Providers")), 1, wxEXPAND);
-
-    auto item_bambu_cloud     = create_item_bambu_cloud(_L("Enable Bambu Cloud"), _L("Allow logging into Bambu Cloud alongside Orca Cloud. When enabled, a Bambu login section appears on the homepage."));
-    g_sizer->Add(item_bambu_cloud);
-
-    //// ONLINE > Update & sync
-    g_sizer->Add(create_item_title(_L("Update & sync")), 1, wxEXPAND);
-
-    auto item_stable_updates   = create_item_checkbox(_L("Check for stable updates only"), "", "check_stable_update_only");
-    g_sizer->Add(item_stable_updates);
-
-    auto item_user_sync        = create_item_checkbox(_L("Auto sync user presets (Printer/Filament/Process)"), "", "sync_user_preset");
-    g_sizer->Add(item_user_sync);
-
-    if (app_config->get_stealth_mode()) {
-        if (m_bambu_cloud_checkbox)      m_bambu_cloud_checkbox->Enable(false);
-        if (m_sync_user_preset_checkbox) m_sync_user_preset_checkbox->Enable(false);
-    }
-
-    auto item_filament_sync_mode = create_item_combobox(
-        _L("Filament sync mode"),
-        _L("Choose whether sync updates both filament preset and color, or only color."),
-        "sync_ams_filament_mode",
-        {_L("Filament & Color"), _L("Color only")});
-    g_sizer->Add(item_filament_sync_mode);
-
-    auto item_system_sync      = create_item_checkbox(_L("Update built-in presets automatically."), "", "sync_system_preset");
-    g_sizer->Add(item_system_sync);
-
-    auto item_token_storage    = create_item_checkbox(_L("Use encrypted file for token storage"),
-                                                      _L("Store authentication tokens in an encrypted file instead of the system keychain. (Requires restart)"),
-                                                      SETTING_USE_ENCRYPTED_TOKEN_FILE);
-    g_sizer->Add(item_token_storage);
-
-    //// ONLINE > Network plugin
-    g_sizer->Add(create_item_title(_L("Bambu network plug-in")), 1, wxEXPAND);
-
-    auto item_enable_plugin    = create_item_checkbox(_L("Enable Bambu network plug-in"), "", "installed_networking");
-    g_sizer->Add(item_enable_plugin);
-
-    auto item_plugin_version = create_item_network_plugin_version(_L("Network plug-in version"), _L("Select the network plug-in version to use"));
-    g_sizer->Add(item_plugin_version);
-
-    g_sizer->AddSpacer(FromDIP(10));
-    sizer_page->Add(g_sizer, 0, wxEXPAND);
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: the Online tab is removed in full — login region, stealth-mode toggle, hide-login
+    // side panel, network test, cloud providers, update & sync, and the Bambu network plug-in.
+    // create_item_region_combobox(), create_item_bambu_cloud() and
+    // create_item_network_plugin_version() stay defined but are no longer called; the members
+    // m_bambu_cloud_checkbox / m_sync_user_preset_checkbox are still assigned and read by
+    // create_item_bambu_cloud()/create_item_checkbox(), so no private field becomes unused.
+    // NOCTE-END
 
     //////////////////////////
     //// ASSOCIATE TAB 

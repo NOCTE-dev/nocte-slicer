@@ -40,8 +40,13 @@ using namespace nlohmann;
 
 namespace Slic3r {
 
-static const std::string VERSION_CHECK_URL = "https://check-version.orcaslicer.com/latest";
-static const std::string PROFILE_UPDATE_URL = "https://check-version.orcaslicer.com/profile";
+// NOCTE-BEGIN nocte-offline
+// ADR-003: NØCTE Slicer never checks for updates and never synchronises profiles. The two URLs
+// are empty, so version_check_url()/profile_update_url() return "" and every consumer that
+// guards on an empty URL (PresetUpdater::priv::set_download_prefs) stays disabled.
+static const std::string VERSION_CHECK_URL = "";
+static const std::string PROFILE_UPDATE_URL = "";
+// NOCTE-END
 
 constexpr const char* CONFIG_ORCA_UPDATER_URL = "orca_updater_url";
 
@@ -348,17 +353,21 @@ void AppConfig::set_defaults()
     if (get("show_overhang").empty())
         set_bool("show_overhang", false);
 
+// NOCTE-BEGIN nocte-offline
+// ADR-003: dark theme by default on Windows, Linux and macOS, so the seed moves out of the
+// _WIN32 block it used to live in and defaults to "1".
+#ifdef SUPPORT_DARK_MODE
+    if (get("dark_color_mode").empty())
+        set("dark_color_mode", "1");
+#endif
+// NOCTE-END
+
 #ifdef _WIN32
 
 //#ifdef SUPPORT_3D_CONNEXION
     if (get("use_legacy_3DConnexion").empty())
         set_bool("use_legacy_3DConnexion", true);
 //#endif
-
-#ifdef SUPPORT_DARK_MODE
-    if (get("dark_color_mode").empty())
-        set("dark_color_mode", "0");
-#endif
 
 //#ifdef SUPPORT_SYS_MENU
     if (get("sys_menu_enabled").empty())
@@ -399,12 +408,16 @@ void AppConfig::set_defaults()
     }
 
     // Orca
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: offline by default. Stealth mode is the permanent state (no "Quit Stealth Mode"
+    // escape, no Preferences toggle) and the home page carries no login side panel.
     if (get("stealth_mode").empty()) {
-        set_bool("stealth_mode", false);
+        set_bool("stealth_mode", true);
     }
     if (get("hide_login_side_panel").empty()) {
-        set_bool("hide_login_side_panel", false);
+        set_bool("hide_login_side_panel", true);
     }
+    // NOCTE-END
     if (get("allow_abnormal_storage").empty()) {
         set_bool("allow_abnormal_storage", false);
     }
@@ -554,9 +567,12 @@ void AppConfig::set_defaults()
     //     set_bool("staff_pick_switch", false);
     // }
 
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: built-in presets are never fetched from a vendor update server.
     if (get("sync_system_preset").empty()) {
-        set_bool("sync_system_preset", true);
+        set_bool("sync_system_preset", false);
     }
+    // NOCTE-END
 
     if (get("backup_switch").empty() || get("version") < "01.06.00.00") {
         set_bool("backup_switch", true);
@@ -927,16 +943,13 @@ std::string AppConfig::load()
         }
 
         // Default for new installs
+        // NOCTE-BEGIN nocte-offline
+        // ADR-003: no cloud agent is ever created (NetworkAgentFactory), so a fresh install
+        // enables no provider. get_cloud_providers() tolerates the empty value.
         if (get(SETTING_CLOUD_PROVIDERS).empty()) {
-            // Migrate add bbl cloud if installed_networking is true
-            bool enable_bbl_cloud = get_bool("installed_networking");
-            if (enable_bbl_cloud) {
-                // Legacy Bambu-only user: give them both providers
-                set(SETTING_CLOUD_PROVIDERS, "orca;bbl");
-            } else {
-                set(SETTING_CLOUD_PROVIDERS, "orca");
-            }
+            set(SETTING_CLOUD_PROVIDERS, "");
         }
+        // NOCTE-END
     }
 
     // Override missing or keys with their defaults.

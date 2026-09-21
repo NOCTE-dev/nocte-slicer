@@ -119,7 +119,11 @@ GuideFrame::GuideFrame(GUI_App *pGUI, long style)
     // INI
     m_SectionName = "firstguide";
     PrivacyUse    = false;
-    StealthMode   = false;
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: the wizard has no stealth-mode page any more and NØCTE never leaves stealth mode,
+    // so SaveProfile() always writes stealth_mode = true.
+    StealthMode   = true;
+    // NOCTE-END
     InstallNetplugin = false;
 
     m_MainPtr = pGUI;
@@ -185,7 +189,10 @@ GuideFrame::GuideFrame(GUI_App *pGUI, long style)
     // Bind(wxEVT_CLOSE_WINDOW, &GuideFrame::OnClose, this);
 
     // UI
-    SetStartPage(BBL_REGION);
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: the login-region page (web/guide/11) is gone; the wizard opens on printer selection.
+    SetStartPage(BBL_MODELS);
+    // NOCTE-END
 
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(",  finished");
     wxGetApp().UpdateDlgDarkUI(this);
@@ -224,9 +231,12 @@ wxString GuideFrame::SetStartPage(GuidePage startpage, bool load)
     if (startpage == BBL_WELCOME){
         SetTitle(_L("Setup Wizard"));
         TargetUrl = from_u8((boost::filesystem::path(resources_dir()) / "web/guide/0/index.html?target=1").make_preferred().string());
+    // NOCTE-BEGIN nocte-offline
+    // ADR-003: web/guide/11 (login region) was removed; BBL_REGION now lands on printer selection.
     } else if (startpage == BBL_REGION) {
         SetTitle(_L("Setup Wizard"));
-        TargetUrl = from_u8((boost::filesystem::path(resources_dir()) / "web/guide/0/index.html?target=11").make_preferred().string());
+        TargetUrl = from_u8((boost::filesystem::path(resources_dir()) / "web/guide/0/index.html?target=21").make_preferred().string());
+    // NOCTE-END
     } else if (startpage == BBL_MODELS) {
         SetTitle(_L("Setup Wizard"));
         TargetUrl = from_u8((boost::filesystem::path(resources_dir()) / "web/guide/0/index.html?target=21").make_preferred().string());
@@ -563,100 +573,19 @@ void GuideFrame::OnScriptMessage(wxWebViewEvent &evt)
                 m_ProfileJson["filament"][fName]["selected"] = 1;
             }
         }
-        else if (strCmd == "check_for_new_printers") {
-            json response = json::object();
-            response["command"] = "check_new_printers_result";
-            // Guide pages currently send sequence_id as a number, while older
-            // pages may send it as a string. Preserve the value without
-            // forcing either representation.
-            if (j.contains("sequence_id"))
-                response["sequence_id"] = j["sequence_id"];
-            else
-                response["sequence_id"] = "";
-
-            if (!m_MainPtr->preset_updater) {
-                response["error"] = "Printer update service is unavailable.";
-                wxString strJS = wxString::Format("HandleStudio(%s)", response.dump(-1, ' ', true));
-                wxGetApp().CallAfter([this, strJS] { RunScript(strJS); });
-            } else {
-                // Orca: enumerate vendors directly from disk rather than from m_ProfileJson["model"]
-                // — a vendor with no machine models (e.g. a filament-only bundle, or a test fixture
-                // like "test123" with an empty machine_model_list) never gets a "vendor" entry
-                // pushed into "model" by LoadProfileFamily(), so it would be invisible to the
-                // request body and get endlessly re-offered by the server. Scan both the system dir
-                // (already-installed vendors) and the bundled resources dir (shipped-but-not-yet-
-                // installed vendors), same as LoadProfileData() does when building loaded_vendors.
-                std::set<std::string> system_vendors;
-                for (const auto& dir : {vendor_dir, rsrc_vendor_dir}) {
-                    if (!boost::filesystem::exists(dir))
-                        continue;
-                    for (const auto& entry : boost::filesystem::directory_iterator(dir)) {
-                        if (!boost::filesystem::is_directory(entry) && boost::iequals(entry.path().extension().string(), ".json"))
-                            system_vendors.insert(entry.path().stem().string());
-                    }
-                }
-                // Orca: check_new_vendors() is async (network + confirmation dialog + download
-                // all happen off the calling thread apart from the dialog itself); guard against
-                // this dialog being closed before the callback fires.
-                wxWeakRef<GuideFrame> weak_this(this);
-                try {
-                    m_MainPtr->preset_updater->check_new_vendors(
-                        system_vendors, [weak_this, response](std::vector<std::string> installed_vendors, bool declined) mutable {
-                            if (!weak_this)
-                                return;
-
-                            // Orca: append the newly installed vendor(s) into the in-memory
-                            // profile data (instead of a full LoadProfileData() rescan of every
-                            // vendor) and push the refreshed list to the webview, the same way
-                            // request_userguide_profile does, so the printer list picks them up
-                            // without needing to reopen the guide.
-                            for (const auto& vendor_id : installed_vendors) {
-                                weak_this->LoadProfileFamily(vendor_id, (weak_this->vendor_dir / (vendor_id + ".json")).string());
-                            }
-                            if (!installed_vendors.empty()) {
-                                json profile_response            = json::object();
-                                profile_response["command"]      = "response_userguide_profile";
-                                profile_response["sequence_id"]  = "10001";
-                                profile_response["response"]     = weak_this->m_ProfileJson;
-                                wxString profileJS = wxString::Format("HandleStudio(%s)", profile_response.dump(-1, ' ', true));
-                                weak_this->RunScript(profileJS);
-                            }
-
-                            response["vendors"]  = installed_vendors;
-                            response["declined"] = declined;
-                            wxString strJS = wxString::Format("HandleStudio(%s)", response.dump(-1, ' ', true));
-                            weak_this->RunScript(strJS);
-                        });
-                } catch (const std::exception &e) {
-                    BOOST_LOG_TRIVIAL(warning) << "Failed to check for new printers: " << e.what();
-                    response["error"] = "Failed to check for new printers.";
-                    wxString strJS = wxString::Format("HandleStudio(%s)", response.dump(-1, ' ', true));
-                    wxGetApp().CallAfter([this, strJS] { RunScript(strJS); });
-                }
-            }
-        }
+        // NOCTE-BEGIN nocte-offline
+        // ADR-003: "Check for new printers" queried the Orca profile-update server
+        // (PresetUpdater::check_new_vendors()). It is not gated by enable_ota, so with an
+        // empty profile_update_url it would still have fired a request. The command and the
+        // button that sent it (resources/web/guide/24) are both gone.
+        // NOCTE-END
         else if (strCmd == "user_guide_finish") {
             SaveProfile();
 
-            std::string oldregion = m_ProfileJson["region"];
-            if (m_Region != oldregion) {
-                AppConfig* config = GUI::wxGetApp().app_config;
-                std::string country_code = config->get_country_code();
-                NetworkAgent* agent = wxGetApp().getAgent();
-                if (agent) {
-                    agent->set_country_code(country_code);
-                    if (wxGetApp().is_user_login()) {
-                        BOOST_LOG_TRIVIAL(info) << "logout: user_logout on user_guide_finish";
-                        // agent->user_logout();
-                        wxGetApp().request_user_logout();
-                    }
-                }
-            }
-
+            // NOCTE-BEGIN nocte-offline
+            // ADR-003: no account, so no region-change logout; no network-plugin download.
             this->EndModal(wxID_OK);
-
-            if (InstallNetplugin)
-                GUI::wxGetApp().CallAfter([] { GUI::wxGetApp().ShowDownNetPluginDlg(); });
+            // NOCTE-END
         }
         else if (strCmd == "user_guide_create_printer") {
             this->EndModal(wxID_CANCEL);
@@ -666,30 +595,13 @@ void GuideFrame::OnScriptMessage(wxWebViewEvent &evt)
         else if (strCmd == "user_guide_cancel") {
             this->EndModal(wxID_CANCEL);
             this->Close();
-        } else if (strCmd == "save_region") {
-            m_Region = j["region"];
         }
-        else if (strCmd == "network_plugin_install") {
-            std::string sAction = j["data"]["action"];
-
-            if (sAction == "yes") {
-                if (!network_plugin_ready)
-                    InstallNetplugin = true;
-                else //already ready
-                    InstallNetplugin = false;
-            }
-            else
-                InstallNetplugin = false;
-        }
-        else if (strCmd == "save_stealth_mode") {
-            wxString strAction = j["data"]["action"];
-
-            if (strAction == "yes") {
-                StealthMode = true;
-            } else {
-                StealthMode = false;
-            }
-        }
+        // NOCTE-BEGIN nocte-offline
+        // ADR-003: the wizard no longer has a login-region page (web/guide/11), a stealth-mode
+        // page (web/guide/4orca) or a network-plugin page (web/guide/5), so the commands
+        // "save_region", "network_plugin_install" and "save_stealth_mode" are gone. m_Region
+        // keeps whatever AppConfig already holds and StealthMode is fixed to true.
+        // NOCTE-END
     } catch (std::exception &e) {
         // wxMessageBox(e.what(), "json Exception", MB_OK);
         BOOST_LOG_TRIVIAL(trace) << "GuideFrame::OnScriptMessage;Error:" << e.what();
@@ -1641,12 +1553,15 @@ int GuideFrame::SaveProfileData()
         m_Region = wxGetApp().app_config->get("region");
         m_ProfileJson["region"] = m_Region;
 
-        m_ProfileJson["network_plugin_install"] = wxGetApp().app_config->get("app","installed_networking");
-        m_ProfileJson["network_plugin_compability"] = wxGetApp().is_compatibility_version() ? "1" : "0";
-        network_plugin_ready = wxGetApp().is_compatibility_version();
+        // NOCTE-BEGIN nocte-offline
+        // ADR-003: the wizard never offers the Bambu network plug-in and never leaves stealth
+        // mode. The two "network_plugin_*" entries the plug-in page read are no longer
+        // published; network_plugin_ready stays false and stealth mode is reported as on.
+        network_plugin_ready = false;
 
-        StealthMode = wxGetApp().app_config->get_bool("app","stealth_mode");
+        StealthMode = true;
         m_ProfileJson["stealth_mode"] = StealthMode;
+        // NOCTE-END
     }
     catch (std::exception &e) {
         BOOST_LOG_TRIVIAL(error) << __FUNCTION__ << ", error: "<< e.what() <<std::endl;
@@ -1916,24 +1831,19 @@ bool GuideFrame::LoadFile(std::string jPath, std::string &sContent)
     return true;
 }
 
+// NOCTE-BEGIN nocte-offline
+// ADR-003: NØCTE never downloads or installs the Bambu network plug-in. The two entry
+// points stay declared (WebGuideDialog.hpp is not a touch point) and report failure.
 int GuideFrame::DownloadPlugin()
 {
-    return wxGetApp().download_plugin(
-        "plugins", "network_plugin.zip",
-        [this](int status, int percent, bool& cancel) {
-            return ShowPluginStatus(status, percent, cancel);
-        }
-    , nullptr);
+    return -1;
 }
 
 int GuideFrame::InstallPlugin()
 {
-    return wxGetApp().install_plugin("plugins", "network_plugin.zip",
-        [this](int status, int percent, bool &cancel) {
-            return ShowPluginStatus(status, percent, cancel);
-        }
-    );
+    return -1;
 }
+// NOCTE-END
 
 int GuideFrame::ShowPluginStatus(int status, int percent, bool& cancel)
 {

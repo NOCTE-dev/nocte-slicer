@@ -12,18 +12,13 @@ function HandleStudio(pVal)
 	
 	if(strCmd=='response_userguide_profile')
 	{
+		// NOCTE-BEGIN nocte-offline
+		// ADR-003: filament selection is the last step; there is no stealth-mode page (../4orca)
+		// and no network-plugin page (../5), so InstallNetworkPlugin() is gone and "Finish" is
+		// always the primary button.
 		m_ProfileItem=pVal['response'];
 		SortUI();
-		InstallNetworkPlugin();
-	}
-}
-
-function InstallNetworkPlugin()
-{
-	if(m_ProfileItem["network_plugin_install"]!='1' || (m_ProfileItem["network_plugin_install"]=='1' && m_ProfileItem["network_plugin_compability"]=='0') )
-	{
-		$("#AcceptBtn").hide();
-		$("#GotoNetPluginBtn").show();
+		// NOCTE-END
 	}
 }
 
@@ -35,14 +30,6 @@ function ReturnPreviewPage()
 		document.location.href="../1/index.html";
 	else
 		document.location.href="../21/index.html";	
-}
-
-function GotoNetPluginPage()
-{
-	let bRet=ResponseFilamentResult();
-	
-	if(bRet)
-		window.location.href="../4orca/index.html";
 }
 
 function FinishGuide()
