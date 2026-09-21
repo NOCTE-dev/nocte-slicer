@@ -34,7 +34,11 @@ std::string host_theme_vars_css()
     const wxColour fg     = app.get_label_clr_default();
     const wxColour muted  = app.get_label_clr_sys();
     const wxColour border = app.get_highlight_default_clr();
-    const wxColour accent = StateColor::darkModeColorFor(wxColour("#009688"));
+    // NOCTE-BEGIN nocte-identity
+    // Accent for the hosted web dialogs: the NØCTE surface grey (NocteTheme.hpp), which reads on
+    // both themes and carries the white text the pages use on buttons.
+    const wxColour accent = StateColor::darkModeColorFor(wxColour("#55555D"));
+    // NOCTE-END
     std::string    font   = app.normal_font().GetFaceName().ToStdString();
     // Strip characters that could break out of the CSS value / <style> block.
     font.erase(std::remove_if(font.begin(), font.end(), [](char c) {

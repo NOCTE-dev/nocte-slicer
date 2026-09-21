@@ -163,21 +163,25 @@ void BBLTopbarArt::DrawButton(wxDC& dc, wxWindow* wnd, const wxAuiToolBarItem& i
 
     if (!(item.GetState() & wxAUI_BUTTON_STATE_DISABLED))
     {
+        // NOCTE-BEGIN nocte-identity
+        // Colour values only (ADR-003). The seven ORCA teal literals become the NOCTE top-bar
+        // highlight key, which StateColor::gDarkColors turns into #5A5A62 in dark mode and
+        // leaves at #4A4A50 in light mode: a neutral grey on the (always dark) top bar.
         if (item.GetState() & wxAUI_BUTTON_STATE_PRESSED)
         {
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(StateColor::darkModeColorFor("#4A4A50"))); // NOCTE
+            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#4A4A50"))); // NOCTE
             dc.DrawRectangle(rect);
         }
         else if ((item.GetState() & wxAUI_BUTTON_STATE_HOVER) || item.IsSticky())
         {
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(StateColor::darkModeColorFor("#4A4A50"))); // NOCTE
+            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#4A4A50"))); // NOCTE
 
             // draw an even lighter background for checked item hovers (since
             // the hover background is the same color as the check background)
             if (item.GetState() & wxAUI_BUTTON_STATE_CHECKED)
-                dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+                dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#4A4A50"))); // NOCTE
 
             dc.DrawRectangle(rect);
         }
@@ -185,10 +189,11 @@ void BBLTopbarArt::DrawButton(wxDC& dc, wxWindow* wnd, const wxAuiToolBarItem& i
         {
             // it's important to put this code in an else statement after the
             // hover, otherwise hovers won't draw properly for checked items
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(StateColor::darkModeColorFor("#4A4A50"))); // NOCTE
+            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#4A4A50"))); // NOCTE
             dc.DrawRectangle(rect);
         }
+        // NOCTE-END
     }
 
     if (bmp.IsOk())

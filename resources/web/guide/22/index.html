@@ -104,8 +104,11 @@
 </div>
 <div id="AcceptArea">
 	<div class="ButtonStyleRegular ButtonTypeChoice trans" tid="t8" id="PreBtn"  onclick="ReturnPreviewPage()">Back</div>
-	<div class="ButtonStyleRegular ButtonTypeChoice trans" tid="t25" id="AcceptBtn"  onclick="FinishGuide()">finish</div>
-	<div class="ButtonStyleConfirm ButtonTypeChoice trans" tid="t9" id="GotoNetPluginBtn"  onclick="GotoNetPluginPage()">Next</div>	
+	<!-- NOCTE-BEGIN nocte-offline
+	     ADR-003: last step of the wizard. The "Next" button led to the stealth-mode (../4orca)
+	     and network-plugin (../5) pages, both removed, so only "Finish" remains. -->
+	<div class="ButtonStyleConfirm ButtonTypeChoice trans" tid="t25" id="AcceptBtn"  onclick="FinishGuide()">finish</div>
+	<!-- NOCTE-END -->
 </div>
 <div id="NoticeMask">
 </div>

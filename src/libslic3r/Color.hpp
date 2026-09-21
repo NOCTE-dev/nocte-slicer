@@ -66,7 +66,12 @@ public:
 	static const ColorRGB REDISH()      { return { 1.0f, 0.5f, 0.5f }; }
 	static const ColorRGB YELLOW()      { return { 1.0f, 1.0f, 0.0f }; }
 	static const ColorRGB WHITE()       { return { 1.0f, 1.0f, 1.0f }; }
-    static const ColorRGB ORCA()		{ return {0.0f, 150.f / 255.0f, 136.0f / 255}; }
+    // NOCTE-BEGIN nocte-identity
+    // Colour value only (ADR-003). The accent reaches gizmo highlights, the measure tool and the
+    // ImGui palette, which sit over both the light and the dark 3D background, so it is the one
+    // mid grey that keeps contrast against both: NOCTE_NEUTRAL #8C8C90 (Nocte/NocteTheme.hpp).
+    static const ColorRGB ORCA()		{ return {140.f / 255.0f, 140.f / 255.0f, 144.0f / 255}; }
+    // NOCTE-END
 	static const ColorRGB WARNING()     { return {241.0f / 255, 117.f / 255.0f, 78.0f / 255}; }
 
 	static const ColorRGB X()           { return { 255 / 255.f, 60  / 255.f, 91  / 255.f};}
@@ -138,7 +143,10 @@ public:
 	static const ColorRGBA REDISH()      { return { 1.0f, 0.5f, 0.5f, 1.0f }; }
 	static const ColorRGBA YELLOW()      { return { 1.0f, 1.0f, 0.0f, 1.0f }; }
 	static const ColorRGBA WHITE()       { return { 1.0f, 1.0f, 1.0f, 1.0f }; }
-    static const ColorRGBA ORCA()        { return {0.0f, 150.f / 255.0f, 136.0f / 255, 1.0f}; }
+    // NOCTE-BEGIN nocte-identity
+    // Colour value only (ADR-003); same grey as ColorRGB::ORCA() above, NOCTE_NEUTRAL #8C8C90.
+    static const ColorRGBA ORCA()        { return {140.f / 255.0f, 140.f / 255.0f, 144.0f / 255, 1.0f}; }
+    // NOCTE-END
 
 	static const ColorRGBA X()           { return { ColorRGB::X().r(), ColorRGB::X().g(), ColorRGB::X().b(), 1.f };}
 	static const ColorRGBA Y()           { return { ColorRGB::Y().r(), ColorRGB::Y().g(), ColorRGB::Y().b(), 1.f };}

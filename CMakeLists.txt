@@ -900,7 +900,12 @@ set(BBL_L18N_DIR "${CMAKE_CURRENT_SOURCE_DIR}/localization/i18n")
 add_custom_target(gettext_make_pot
     COMMAND xgettext --keyword=L --keyword=_L --keyword=_u8L --keyword=L_CONTEXT:1,2c --keyword=_L_CONTEXT:1,2c --keyword=_u8L_CONTEXT:1,2c --keyword=_L_PLURAL:1,2 --add-comments=TRN --from-code=UTF-8 --no-location --debug --boost
         -f "${BBL_L18N_DIR}/list.txt"
-        -o "${BBL_L18N_DIR}/OrcaSlicer.pot"
+        # NOCTE-BEGIN nocte-rename
+        # The catalog is named after the runtime app key (see version.inc). hintsToPot still
+        # appends to OrcaSlicer.pot (deps_src is not a touch point); scripts/run_gettext.* use
+        # scripts/HintsToPot.py, which follows the new name.
+        -o "${BBL_L18N_DIR}/NocteSlicer.pot"
+        # NOCTE-END
     COMMAND hintsToPot ${SLIC3R_RESOURCES_DIR} ${BBL_L18N_DIR}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     COMMENT "Generate pot file from strings in the source tree"
@@ -909,24 +914,30 @@ add_custom_target(gettext_merge_po_with_pot
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     COMMENT "Merge localization po with new generated pot file"
 )
-file(GLOB BBL_L10N_PO_FILES "${BBL_L18N_DIR}/*/OrcaSlicer*.po")
+# NOCTE-BEGIN nocte-rename
+file(GLOB BBL_L10N_PO_FILES "${BBL_L18N_DIR}/*/NocteSlicer*.po")
 foreach(po_file ${BBL_L10N_PO_FILES})
     GET_FILENAME_COMPONENT(po_dir "${po_file}" DIRECTORY)
-    SET(po_new_file "${po_dir}/OrcaSlicer_.po")
+    SET(po_new_file "${po_dir}/NocteSlicer_.po")
     add_custom_command(
         TARGET gettext_merge_po_with_pot PRE_BUILD
-        COMMAND msgmerge -N -o ${po_file} ${po_file} "${BBL_L18N_DIR}/OrcaSlicer.pot"
+        COMMAND msgmerge -N -o ${po_file} ${po_file} "${BBL_L18N_DIR}/NocteSlicer.pot"
     )
 endforeach()
+# NOCTE-END
 add_custom_target(gettext_po_to_mo
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     COMMENT "Generate localization po files (binary) from mo files (texts)"
 )
-file(GLOB L10N_PO_FILES "${BBL_L18N_DIR}/*/OrcaSlicer*.po")
+# NOCTE-BEGIN nocte-rename
+file(GLOB L10N_PO_FILES "${BBL_L18N_DIR}/*/NocteSlicer*.po")
+# NOCTE-END
 foreach(po_file ${BBL_L10N_PO_FILES})
     GET_FILENAME_COMPONENT(SECOND_FOLDER_ABSOLUTE ${po_file} DIRECTORY)
     string(REGEX REPLACE ".*/(.*)" "\\1" po_dir "${SECOND_FOLDER_ABSOLUTE}" )
-    SET(mo_file "${L10N_DIR}/${po_dir}/OrcaSlicer.mo")
+    # NOCTE-BEGIN nocte-rename
+    SET(mo_file "${L10N_DIR}/${po_dir}/NocteSlicer.mo")
+    # NOCTE-END
     add_custom_command(
         TARGET gettext_po_to_mo PRE_BUILD
         COMMAND msgfmt ARGS --check-format -o ${mo_file} ${po_file}
@@ -1333,7 +1344,9 @@ set (CPACK_PACKAGE_VENDOR "NOCTE Engineering")
 set (CPACK_PACKAGE_VERSION_MAJOR "${ORCA_VERSION_MAJOR}")
 set (CPACK_PACKAGE_VERSION_MINOR "${ORCA_VERSION_MINOR}")
 set (CPACK_PACKAGE_VERSION_PATCH "${ORCA_VERSION_PATCH}")
-set (CPACK_PACKAGE_FILE_NAME "OrcaSlicer_Windows_Installer_V${SoftFever_VERSION}")
+# NOCTE-BEGIN nocte-rename
+set (CPACK_PACKAGE_FILE_NAME "NocteSlicer_Windows_Installer_V${SoftFever_VERSION}")
+# NOCTE-END
 # Suffix the Windows installer with its target arch so the x64 and arm64 builds
 # produce distinct filenames (matches ARCH_SUFFIX in build_orca.yml). Same
 # CMAKE_SYSTEM_PROCESSOR mapping used by orcaslicer_copy_dlls() above.
@@ -1350,7 +1363,9 @@ set (CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
 set (CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/resources/images\\\\OrcaSlicer.ico")
 set (CPACK_NSIS_MUI_ICON "${CPACK_PACKAGE_ICON}")
 set (CPACK_NSIS_MUI_UNIICON "${CPACK_PACKAGE_ICON}")
-set (CPACK_NSIS_INSTALLED_ICON_NAME  "$INSTDIR\\\\orca-slicer.exe")
+# NOCTE-BEGIN nocte-rename
+set (CPACK_NSIS_INSTALLED_ICON_NAME  "$INSTDIR\\\\nocte-slicer.exe")
+# NOCTE-END
 set (CPACK_PACKAGE_CHECKSUM SHA256)
 # NOCTE-BEGIN nocte-product
 # The NSIS installer must never touch an OrcaSlicer installation on the same machine: its own
@@ -1361,8 +1376,10 @@ set (CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL OFF)
 # NOCTE-END
 set (CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
 # set (CPACK_NSIS_MODIFY_PATH "ON")
-set(CPACK_PACKAGE_EXECUTABLES "orca-slicer;OrcaSlicer")
-set(CPACK_CREATE_DESKTOP_LINKS "orca-slicer")
+# NOCTE-BEGIN nocte-rename
+set(CPACK_PACKAGE_EXECUTABLES "nocte-slicer;NOCTE Slicer")
+set(CPACK_CREATE_DESKTOP_LINKS "nocte-slicer")
+# NOCTE-END
 set (CPACK_RESOURCE_FILE_LICENSE ${CMAKE_SOURCE_DIR}/LICENSE.txt) # must also include in install command
 
 set(CPACK_WIX_UPGRADE_GUID "058245e8-20e0-4a95-9ab7-1acfe17ad511")

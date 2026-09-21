@@ -283,14 +283,19 @@ bool GLTexture::load_from_svg_files_as_sprites_array(const std::vector<std::stri
     std::vector<unsigned char> disable_data(sprite_bytes, 0);
     std::vector<unsigned char> hover_data(sprite_bytes, 0); // hover
 
+    // NOCTE-BEGIN nocte-identity
+    // Colour values only (ADR-003): the toolbar sprite tints. normal_color was #2B3436, a
+    // teal-tinted near-black; it and the dark-theme tints become the neutral greys of
+    // Nocte/NocteTheme.hpp (#1A1A1C, #3A3A3E, #F2F2F2, #4C4C54).
     const unsigned char pressed_color[3] = {255, 255, 255};
     const unsigned char hover_color[3] = {255, 255, 255};
-    const unsigned char normal_color[3] = {43, 52, 54};
+    const unsigned char normal_color[3] = {26, 26, 28};
     const unsigned char disable_color[3] = {200, 200, 200};
-    const unsigned char pressed_color_dark[3] = {60, 60, 65};
-    const unsigned char hover_color_dark[3] = {60, 60, 65};
-    const unsigned char normal_color_dark[3] = {182, 182, 182};
-    const unsigned char disable_color_dark[3] = {76, 76, 85};
+    const unsigned char pressed_color_dark[3] = {58, 58, 62};
+    const unsigned char hover_color_dark[3] = {58, 58, 62};
+    const unsigned char normal_color_dark[3] = {242, 242, 242};
+    const unsigned char disable_color_dark[3] = {76, 76, 84};
+    // NOCTE-END
 
     NSVGrasterizer* rast = nsvgCreateRasterizer();
     if (rast == nullptr) {

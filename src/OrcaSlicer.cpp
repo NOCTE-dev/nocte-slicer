@@ -112,6 +112,11 @@ using namespace nlohmann;
     // which only a SLIC3R_GUI build links (see target_link_libraries(OrcaSlicer libslic3r_gui)
     // in CMakeLists).
     #include "slic3r/Utils/BBLPrinterAgent.hpp"
+    // NOCTE-BEGIN nocte-rename
+    // Nocte::run_data_dir_migration(), implemented in libslic3r_gui, is called just before the
+    // GUI is started; the CLI build links neither.
+    #include "slic3r/GUI/Nocte/NocteUi.hpp"
+    // NOCTE-END
 #endif /* SLIC3R_GUI */
 
 using namespace Slic3r;
@@ -1507,6 +1512,13 @@ int CLI::run(int argc, char **argv)
         //BBS: remove GCodeViewer as separate APP logic
         //params.start_as_gcodeviewer = start_as_gcodeviewer;
 
+        // NOCTE-BEGIN nocte-rename
+        // First start with an empty NOCTE data directory offers to import an OrcaSlicer one
+        // (ADR-003 section 3). It has to run here: GUI_Run() constructs GUI_App, whose
+        // constructor already reads <data_dir>/NocteSlicer.conf through init_app_config(), and
+        // it has to run after setup(), which is where --datadir reached set_data_dir().
+        Slic3r::GUI::Nocte::run_data_dir_migration();
+        // NOCTE-END
         BOOST_LOG_TRIVIAL(info) << "begin to launch OrcaSlicer GUI soon";
         return Slic3r::GUI::GUI_Run(params);
 #else // SLIC3R_GUI
@@ -6071,6 +6083,12 @@ int CLI::run(int argc, char **argv)
     sliced_info.prepare_time = (size_t) (global_current_time - global_begin_time);
     global_begin_time = global_current_time;
 
+    // NOCTE-BEGIN nocte-rename
+    // NOCTE-TODO(W5): --nocte-lan-probe action. Declare it in CLIActionsConfigDef
+    // (PrintConfig.cpp:11836, next to "info" at :11982) and handle it in this chain. It needs no
+    // model, so it should also be short-circuited next to the --inspect-mesh / --export-settings
+    // pre-checks above (around line 1429) rather than waiting for the load to finish.
+    // NOCTE-END
     for (auto const &opt_key : m_actions) {
         if (opt_key == "help") {
             this->print_help();

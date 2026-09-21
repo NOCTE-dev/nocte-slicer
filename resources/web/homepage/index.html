@@ -3,238 +3,110 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Cache-Control" content="max-age=7200" />
-<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport" />	
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport" />
 <title>homepage</title>
-<link rel="stylesheet" type="text/css" href="../include/global.css" />	<!-- ORCA One for all-->
+<!-- The shared NOCTE tokens, then this page's own rules, then the dark overrides.
+     ../include/globalapi.js adds and removes ./css/dark.css at runtime from the "dark"
+     token in the user agent string, so that exact href must stay spelled this way. -->
+<link rel="stylesheet" type="text/css" href="../include/global.css" />
 <link rel="stylesheet" type="text/css" href="./css/home.css" />
-<link rel="stylesheet" type="text/css" href="./css/dark.css" />	
+<link rel="stylesheet" type="text/css" href="./css/dark.css" />
 
 <script type="text/javascript" src="../include/jquery-2.1.1.min.js"></script>
-<script type="text/javascript" src="../include/json2.js"></script>	
-<script type="text/javascript" src="../include/globalapi.js"></script>	
+<script type="text/javascript" src="../include/json2.js"></script>
+<script type="text/javascript" src="../include/globalapi.js"></script>
+<script type="text/javascript" src="../data/text.js"></script>
 
-<link rel="stylesheet" type="text/css" href="../include/swiper/swiper-bundle.min.css" />
-<script type="text/javascript" src="../include/swiper/swiper-bundle.min.js"></script>
-<script type="text/javascript" src="../data/text.js"></script>		
-	
 <script type="text/javascript" src="js/home.js"></script>
 </head>
 <body class="ZScrol" onLoad="OnInit()">
+
 <div id="LeftBoard">
-	<div id="LoginArea">
-
-		<!-- Orca Cloud account -->
-		<div id="OrcaAccount" class="AccountRow" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false"
-			 onClick="OnAccountRowClick('orca')">
-			<span class="AccountAvatar">
-				<img id="UserAvatarIcon" class="AccountAvatarImg" alt="" onerror="OnAvatarLoadError(this)" />
-			</span>
-			<span class="AccountText">
-				<span id="UserName" class="AccountName"></span>
-				<span class="AccountSecondary">Orca Cloud</span>
-			</span>
-			<span class="AccountSignIn trans" tid="t26">Login</span>
-			<svg class="AccountChevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-				<path d="M3 4.75L6 7.75L9 4.75" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-			</svg>
-		</div>
-
-		<!-- Bambu Cloud, a secondary provider folded away under the main account -->
-		<div id="BambuCloudSection">
-			<div id="BambuCloudHeader" tabindex="0" role="button" aria-expanded="false" aria-controls="BambuCloudBody"
-				 onClick="ToggleBambuSection()">
-				<svg class="SectionChevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-					<path d="M4.5 2.5L8 6L4.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-				</svg>
-				<span class="SectionLabel trans" tid="orca6">Bambu Cloud</span>
-				<span id="BambuStatusDot"></span>
-			</div>
-
-			<div id="BambuCloudBody">
-				<div id="BambuAccount" class="AccountRow AccountRowCompact" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false"
-					 onClick="OnAccountRowClick('bambu')">
-					<span class="AccountAvatar">
-						<img id="BambuAvatarIcon" class="AccountAvatarImg" alt="" onerror="OnAvatarLoadError(this)" />
-					</span>
-					<span class="AccountText">
-						<span id="BambuUserName" class="AccountName"></span>
-						<span class="AccountSecondary trans" tid="orca8">Not signed in</span>
-					</span>
-					<span class="AccountSignIn trans" tid="t26">Login</span>
-					<svg class="AccountChevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-						<path d="M3 4.75L6 7.75L9 4.75" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-					</svg>
-				</div>
-
-				<div id="NoPluginTip">
-					<div id="NoPluginText"><a class="RedFont trans" tid="t76">Network plugin not detected. Click </a><a Class="LinkBtn trans" onClick="BeginDownloadNetworkPlugin()" tid="t77">here</a><a class="RedFont trans" tid="t78"> to install it.</a></div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Shared account menu, anchored under the row it was opened from.
-		     The row already carries the avatar, name and provider, so the menu only
-		     adds the account handle. -->
-		<div id="AccountMenu" role="menu">
-			<div id="AccountMenuHandle" role="presentation"></div>
-			<div id="AccountMenuLogout" role="menuitem" tabindex="0" onClick="OnAccountMenuLogout()">
-				<span id="AccountMenuLogoutIcon"></span>
-				<span class="trans" tid="t50">Log out</span>
-			</div>
-		</div>
-
+	<div id="BrandArea">
+		<!-- Two variants rather than one recoloured asset: the theme is switched by adding or
+		     removing css/dark.css, which cannot rewrite an <img> src. The light file is the
+		     black mark for a light background, the dark file the white mark for a dark one. -->
+		<img class="BrandWordmark BrandLight" src="../image/nocte_wordmark_light.svg" alt="N&#216;CTE" />
+		<img class="BrandWordmark BrandDark" src="../image/nocte_wordmark_dark.svg" alt="N&#216;CTE" />
+		<div id="BrandTagline">Building the Impossible</div>
 	</div>
 
 	<div id="BtnArea">
-	    <div menu="recent" class="BtnItem BtnItemSelected" onClick="GotoMenu('recent')">
-			<div class="BtnIcon "><img class="LeftIcon" src="img/i2.png" /></div>
-			<div class="trans" tid="t28">recent</div> 
-		</div>
-	    <div class="BtnItem BtnShortcut" onClick="OpenUrlInLocalBrowser('https://cloud.orcaslicer.com')">
-			<div class="BtnIcon "><img class="ShortcutBrandIcon" src="../image/logo.png" /></div>
-			<div class="ShortcutTextRow">
-				<div>OrcaCloud</div>
-				<svg class="ShortcutMark" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-					<path d="M6 3.5H3.5C2.95 3.5 2.5 3.95 2.5 4.5V12.5C2.5 13.05 2.95 13.5 3.5 13.5H11.5C12.05 13.5 12.5 13.05 12.5 12.5V10" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
-					<path d="M8.5 3.5H13.5V8.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
-					<path d="M13.5 3.5L7 10" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+		<div menu="recent" class="BtnItem BtnItemSelected" onClick="GotoMenu('recent')">
+			<span class="BtnIcon">
+				<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<circle cx="8" cy="8" r="6.25" stroke="currentColor" stroke-width="1.4"/>
+					<path d="M8 4.5V8l2.5 1.75" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
 				</svg>
-			</div>
+			</span>
+			<span class="trans" tid="t28">Recent</span>
 		</div>
-
 	</div>
 </div>
 
 <div id="RightBoard">
 <div id="ContentBoard" class="ZScrol" board="recent">
-    <div style="height: 14px;"></div>	
+
 	<div id="MenuArea">
-<!--		<div class="MenuItem" onClick="OnClickModelDepot()">
-			<div class="MenuIcon"><img src="img/i6.png"></div>
-			<div>
-				<div class="trans TextS1" tid="t90">3D Model</div>
-				<div class="MenuDesc trans"  tid="t91">Download 3D Models</div>
-			</div>
-		</div>	-->	
 		<div class="MenuItem" onClick="OnClickNewProject()">
-			<div class="MenuIcon"><img src="img/i4.png"></div>
-			<div>
-				<div class="trans TextS1" tid="t31">new project</div>
-				<div class="MenuDesc trans"  tid="t32">create new project</div>
-			</div>
+			<span class="MenuIcon">
+				<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<rect x="3.75" y="3.75" width="16.5" height="16.5" rx="2" stroke="currentColor" stroke-width="1.5"/>
+					<path d="M12 8.25v7.5M8.25 12h7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+				</svg>
+			</span>
+			<span class="MenuText">
+				<span class="TextS1 trans" tid="t31">New Project</span>
+				<span class="MenuDesc trans" tid="t32">Create new project</span>
+			</span>
 		</div>
 		<div class="MenuItem" onClick="OnClickOpenProject()">
-			<div class="MenuIcon"><img src="img/i5.png"></div>
-			<div>
-				<div class="trans TextS1" tid="t33">open project</div>
-				<div class="MenuDesc">3mf</div>
-			</div>
-		</div>		
+			<span class="MenuIcon">
+				<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<path d="M3.75 18.25V6.75a1.5 1.5 0 0 1 1.5-1.5h3.9l1.8 2.25h7.8a1.5 1.5 0 0 1 1.5 1.5v9.25a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+				</svg>
+			</span>
+			<span class="MenuText">
+				<span class="TextS1 trans" tid="t33">Open Project</span>
+				<span class="MenuDesc">3mf</span>
+			</span>
+		</div>
 	</div>
-	
-	<div id="DebugText"></div>	
+
 	<div id="RecentFileArea">
 		<div id="RecentTitleBlock">
-		    <div id="RecentTitle" class="Content-Title trans TextS1" tid="t35">recent open</div>
+			<div id="RecentTitle" class="Content-Title TextS1 trans" tid="t35">Recently opened</div>
 			<div id="RecentClearAllBtn" class="ButtonStyleRegular ButtonTypeWindow trans" tid="t12" onClick="OnDeleteAllRecentFiles()">Clear all</div>
 		</div>
-		<div id="FileList">
-<!--		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>
-		    <div class="FileItem" onClick="OnOpenRecentFile('aaaa')" fpath='d:\model\11.3mf'>
-				<a class="FileTip" title="d:\model\11.3mf"></a>
-				<div class="FileImg"><img src="img/d.png"/></div>
-				<div class="FileName TextS1">abcd12334abcd12334abcd12334.3mf</div>
-				<div class="FileDate">2021/12/27 09:22</div>
-			</div>	-->		
-		</div>
+		<div id="FileList"></div>
+		<div id="EmptyState" class="trans" tid="nocte1">No recent projects yet</div>
 	</div>
-	
-    <div style="height: 14px;"></div>	
-	
+
 	<div id="recnet_context_menu">
 		<div id="CT_Delete_Bar" class="CT_Item" onClick="OnDeleteRecentFile()">
-			<div class="CT_Icon CT_Delete"></div>
-			<div class="CT_Text trans" tid="t88">clear</div>
+			<span class="CT_Icon">
+				<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<path d="M2.75 4.25h10.5M6.5 4.25V2.75h3v1.5M4.25 4.25l.6 8.5a1 1 0 0 0 1 .95h4.3a1 1 0 0 0 1-.95l.6-8.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+				</svg>
+			</span>
+			<span class="CT_Text trans" tid="t88">Remove</span>
 		</div>
-		<div id="CT_Folder_Bar" class="CT_Item " onClick="OnExploreRecentFile()" >
-			<div class="CT_Icon CT_Explore"></div>
-			<div class="CT_Text trans" tid="t89">open in explorer </div>
-		</div>				
-    </div>
-	
-	
+		<div id="CT_Folder_Bar" class="CT_Item" onClick="OnExploreRecentFile()">
+			<span class="CT_Icon">
+				<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<path d="M2 12.25V4.25a1 1 0 0 1 1-1h2.6l1.2 1.5H13a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+				</svg>
+			</span>
+			<span class="CT_Text trans" tid="t89">Open Containing Folder</span>
+		</div>
+	</div>
+
+</div>
 </div>
 
-</div>	
 </body>
 <script type="text/javascript">
-	//HandleStudio(TestData);
-    document.onkeydown = function (event) {
+	document.onkeydown = function (event) {
 		var e = event || window.event || arguments.callee.caller.arguments[0];
 
 		if (e.ctrlKey && e.metaKey)
@@ -261,18 +133,5 @@
 			event.preventDefault();
 		}
 	}, { passive: false });
-
 </script>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-

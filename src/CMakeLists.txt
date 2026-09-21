@@ -219,7 +219,11 @@ if (WIN32)
     target_compile_definitions(OrcaSlicer_app_gui PRIVATE "$<$<NOT:$<CONFIG:RelWithDebInfo>>:SLIC3R_WRAPPER_NOCONSOLE>")
     add_dependencies(OrcaSlicer_app_gui OrcaSlicer)
     set_target_properties(OrcaSlicer_app_gui PROPERTIES
-        OUTPUT_NAME "orca-slicer"
+        # NOCTE-BEGIN nocte-rename
+        # Only the Windows launcher is renamed. It loads OrcaSlicer.dll by a name compiled into
+        # OrcaSlicer_app_msvc.cpp, which stays as upstream has it (ADR-003 section 3).
+        OUTPUT_NAME "nocte-slicer"
+        # NOCTE-END
         WIN32_EXECUTABLE "$<NOT:$<CONFIG:RelWithDebInfo>>"
     )
     target_link_libraries(OrcaSlicer_app_gui PRIVATE boost_headeronly)

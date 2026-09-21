@@ -324,8 +324,19 @@ wxBitmap* BitmapCache::load_svg(const std::string &bitmap_name, unsigned target_
 
     // map of color replaces
     std::map<std::string, std::string> replaces;
-    replaces["\"#0x00AE42\""] = "\"#009688\"";
-    replaces["\"#00FF00\""] = "\"#52c7b8\"";
+    // NOCTE-BEGIN nocte-identity
+    // Colour values only, plus the bare-hex forms of the same keys (ADR-003).
+    //
+    // nsvgParseFromFileWithReplace() runs boost::replace_all once per map entry, in std::map key
+    // order; '"' (0x22) sorts before '#' (0x23), so every quoted key is applied before every bare
+    // one and a bare rule can never undo a quoted one — the quoted rule has already consumed the
+    // text it would have matched. Upstream only carried the quoted form, which matches
+    // fill="#009688" but not style="fill:#009688"; of the 2061 teal literals under
+    // resources/images, 1415 are in a style= attribute and only 70 in fill=, so the bare form is
+    // what actually recolours the icon set. The replacements are greyscale in both themes:
+    // NOCTE_ACCENT #FFFFFF on dark, NOCTE_ACCENT_ON_LIGHT #1A1A1C on light (Nocte/NocteTheme.hpp).
+    replaces["\"#0x00AE42\""] = "\"#8C8C90\""; // upstream redirected this to the ORCA teal
+    replaces["\"#00FF00\""]   = "\"#8C8C90\"";
     if (dark_mode) {
         replaces["\"#262E30\""] = "\"#EFEFF0\"";
         replaces["\"#323A3D\""] = "\"#B3B3B5\"";
@@ -335,20 +346,49 @@ wxBitmap* BitmapCache::load_svg(const std::string &bitmap_name, unsigned target_
         replaces["\"#6B6B6B\""] = "\"#818182\"";
         replaces["\"#909090\""] = "\"#FFFFFF\"";
         replaces["\"#00FF00\""] = "\"#FF0000\"";
-        replaces["\"#009688\""] = "\"#00675b\"";
+        replaces["\"#009688\""] = "\"#FFFFFF\"";
         replaces["\"#F1F1F1\""] = "\"#36363B\"";
-        replaces["#DBDBDB"] = "#4A4A51"; // ORCA border color
-        replaces["#F0F0F1"] = "#333337"; // ORCA disabled background color
-        replaces["#262E30"] = "#EFEFF0"; // ORCA
+        replaces["#DBDBDB"] = "#3A3A3E"; // NOCTE_BORDER
+        replaces["#F0F0F1"] = "#333337"; // disabled background color
+        replaces["#262E30"] = "#EFEFF0";
+        replaces["#009688"] = "#FFFFFF"; // NOCTE_ACCENT, catches the style= form
+        replaces["#00675B"] = "#D0D0D4";
+        replaces["#00675b"] = "#D0D0D4";
+        replaces["#26A69A"] = "#D0D0D4";
+        replaces["#26a69a"] = "#D0D0D4";
+        replaces["#008172"] = "#A8A8AC";
+        replaces["#00AE42"] = "#FFFFFF";
+        replaces["#52c7b8"] = "#D0D0D4";
+        replaces["#BFE1DE"] = "#2A2A2E"; // NOCTE_SELECTION_BG
+        replaces["#E5F0EE"] = "#28282C"; // NOCTE_SELECTION_BG_SOFT
+        replaces["#e5f0ee"] = "#28282C";
+        replaces["#EBF9F0"] = "#2C2C31"; // pale green fill of the AMS pipe icons
     } else {
-        replaces["#949494"] = "#7C8282"; // ORCA replace icon line color for light theme
+        replaces["#949494"] = "#828282"; // neutral icon line color for light theme
+        replaces["\"#009688\""] = "\"#1A1A1C\"";
+        replaces["#009688"] = "#1A1A1C"; // NOCTE_ACCENT_ON_LIGHT, catches the style= form
+        replaces["#00675B"] = "#000000";
+        replaces["#00675b"] = "#000000";
+        replaces["#26A69A"] = "#55555D";
+        replaces["#26a69a"] = "#55555D";
+        replaces["#008172"] = "#000000";
+        replaces["#00AE42"] = "#1A1A1C";
+        replaces["#52c7b8"] = "#8C8C90";
+        replaces["#BFE1DE"] = "#D6D6D8";
+        replaces["#E5F0EE"] = "#EDEDEE";
+        replaces["#e5f0ee"] = "#EDEDEE";
+        replaces["#EBF9F0"] = "#EDEDEE"; // pale green fill of the AMS pipe icons
     }
 
-    if (strstr(bitmap_name.c_str(), "toggle_on") != NULL && dark_mode) // ORCA only replace color of toggle button
-        replaces["#009688"] = "#00675b";
+    if (strstr(bitmap_name.c_str(), "toggle_on") != NULL && dark_mode) // only replace color of toggle button
+        replaces["#009688"] = "#FFFFFF";
 
-    if (!new_color.empty())
+    // The explicit colour a caller asks for still wins, in both the quoted and the bare form.
+    if (!new_color.empty()) {
         replaces["\"#009688\""] = "\"" + new_color + "\"";
+        replaces["#009688"] = new_color;
+    }
+    // NOCTE-END
 
      NSVGimage *image = nullptr;
     if (strstr(bitmap_name.c_str(), "printer_thumbnail") == NULL) {

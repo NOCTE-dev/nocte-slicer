@@ -25,15 +25,19 @@ jobs:
       - name: Check translation format
         run: |
           echo $PWD
-          pot_file="./localization/i18n/OrcaSlicer.pot"
+          # NOCTE-BEGIN nocte-rename
+          pot_file="./localization/i18n/NocteSlicer.pot"
+          # NOCTE-END
           for dir in ./localization/i18n/*/
           do
               dir=${dir%*/}      # remove the trailing "/"
               lang=${dir##*/}    # extract the language identifier
           
-              if [ -f "$dir/OrcaSlicer_${lang}.po" ]; then
+              # NOCTE-BEGIN nocte-rename
+              if [ -f "$dir/NocteSlicer_${lang}.po" ]; then
                   mkdir -p ./resources/i18n/${lang}/
-                  msgfmt --check-format -o ./resources/i18n/${lang}/OrcaSlicer.mo $dir/OrcaSlicer_${lang}.po
+                  msgfmt --check-format -o ./resources/i18n/${lang}/NocteSlicer.mo $dir/NocteSlicer_${lang}.po
+              # NOCTE-END
                   # Check the exit status of the msgfmt command
                   if [ $? -ne 0 ]; then
                       echo "Error encountered with msgfmt command for language ${lang}."

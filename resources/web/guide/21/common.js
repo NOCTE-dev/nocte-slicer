@@ -3,6 +3,25 @@ var	ModelNozzleSelected = {};
 let SearchBox;
 let $content;
 
+// NOCTE-BEGIN nocte-offline
+// ADR-003: the setup wizard lists Bambu Lab printers only. The other vendor profiles stay in
+// resources/profiles so existing presets keep resolving; the filter lives here, in the wizard's
+// own page. Add an id to this list to enable another vendor. The id is the one the C++ side
+// sends in each model entry's "vendor" field (WebGuideDialog.cpp, BuildProfileJson:
+// entry["vendor"] = vp.id, and LoadProfileFamily: OneModel["vendor"] = strVendor).
+// "Custom" is not a vendor but the user-defined printer entry; without it a user with no
+// Bambu Lab printer has no way past this page.
+const NOCTE_VENDORS = ["BBL", "Custom"];
+
+function NocteFilterVendors( aModels )
+{
+	if( !Array.isArray(aModels) )
+		return [];
+
+	return aModels.filter(i => NOCTE_VENDORS.indexOf(i['vendor']) >= 0);
+}
+// NOCTE-END
+
 function InitGlobalVariables()
 {
 	SearchBox = document.querySelector('.searchTerm');
@@ -37,34 +56,10 @@ function HandleStudio( pVal )
 	{
 		HandleModelList(pVal['response']);
 	}
-	else if(strCmd=='check_new_printers_result')
-	{
-		let button = document.getElementById("CheckNewPrintersBtn");
-		if (button) {
-			button.style.pointerEvents = "auto";
-			button.style.opacity = "1";
-		}
-
-		let noticeBar = document.getElementById("NoticeBar");
-		let noticeText = document.getElementById("NoticeText");
-		let hasError = pVal.hasOwnProperty("error");
-		noticeBar.classList.toggle("notice-error", hasError);
-		if (hasError) {
-			noticeBar.textContent = "Error";
-			noticeText.textContent = pVal["error"];
-		} else if (pVal["vendors"] && pVal["vendors"].length > 0) {
-			noticeBar.textContent = "New printers found";
-			noticeText.textContent = "New printer vendors installed: " + pVal["vendors"].join(", ");
-		} else if (pVal["declined"]) {
-			noticeBar.textContent = "Information";
-			noticeText.textContent = "New printer vendors were found, but installation was cancelled.";
-		} else {
-			noticeBar.textContent = "Information";
-			noticeText.textContent = "No new printers found.";
-		}
-
-		ShowNotice(1);
-	}
+	// NOCTE-BEGIN nocte-offline
+	// ADR-003: "check_new_printers_result" answered a "check_for_new_printers" request, which
+	// asked the Orca profile-update server for vendors to download. Both sides are removed.
+	// NOCTE-END
 }
 
 function HandleModelList( pVal )
@@ -72,7 +67,11 @@ function HandleModelList( pVal )
 	if( !pVal.hasOwnProperty("model") )
 		return;
 
-	pModel=pVal['model'];
+	// NOCTE-BEGIN nocte-offline
+	// ADR-003: keep only the vendors NØCTE ships a wizard entry for. FilterModelList() and
+	// OnExitFilter() both work off pModel, so filtering once here covers search and submit.
+	pModel=NocteFilterVendors(pVal['model']);
+	// NOCTE-END
 
 	// ORCA ensure list correctly ordered
 	pModel = pModel.sort((a, b)=>(a["vendor"].localeCompare(b["vendor"])))

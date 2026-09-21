@@ -71,8 +71,11 @@ TEST_CASE("Plugin audit denies app config and token filenames anywhere", "[audit
 
     SECTION("matching is case-insensitive on every platform")
     {
-        CHECK(mgr.is_denied_filename(fs::path("orcaslicer.conf")));
-        CHECK(mgr.is_denied_filename(fs::path("ORCASLICER.CONF")));
+        // NOCTE-BEGIN nocte-rename
+        // The denied configuration name follows SLIC3R_APP_KEY, which is NocteSlicer on the fork.
+        CHECK(mgr.is_denied_filename(fs::path("nocteslicer.conf")));
+        CHECK(mgr.is_denied_filename(fs::path("NOCTESLICER.CONF")));
+        // NOCTE-END
         CHECK(mgr.is_denied_filename(fs::path("ORCA_REFRESH_TOKEN.SEC")));
     }
 

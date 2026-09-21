@@ -6,14 +6,18 @@ PRODUCTVERSION @SLIC3R_VERSION@
  {
   BLOCK "040904E4"
   {
-   VALUE "CompanyName", "SoftFever"
+   // NOCTE-BEGIN nocte-rename
+   VALUE "CompanyName", "NOCTE Engineering"
+   // NOCTE-END
    VALUE "FileDescription", "@SLIC3R_APP_NAME@"
    VALUE "FileVersion", "@SLIC3R_BUILD_ID@"
    VALUE "ProductName", "@SLIC3R_APP_NAME@"
    VALUE "ProductVersion", "@SLIC3R_BUILD_ID@"
    VALUE "InternalName", "@SLIC3R_APP_NAME@"
    VALUE "LegalCopyright", ""
-   VALUE "OriginalFilename", "orca-slicer.exe"
+   // NOCTE-BEGIN nocte-rename
+   VALUE "OriginalFilename", "nocte-slicer.exe"
+   // NOCTE-END
   }
  }
  BLOCK "VarFileInfo"
