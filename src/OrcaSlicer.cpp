@@ -117,6 +117,15 @@ using namespace nlohmann;
     // GUI is started; the CLI build links neither.
     #include "slic3r/GUI/Nocte/NocteUi.hpp"
     // NOCTE-END
+    // NOCTE-BEGIN nocte-lan
+    // Nocte::run_lan_probe() is the headless LAN Developer Mode diagnostics run (ADR-002). It is
+    // selected by NOCTE_LAN_PROBE=1 rather than by a --action, because the CLI option table lives
+    // in PrintConfig.cpp, which this change does not touch.
+    #include "slic3r/Utils/Nocte/NocteLanProbe.hpp"
+    // Defined further down in this file, at global scope. The probe prints a checklist, and on
+    // the Windows GUI-subsystem build there is no console to print it to until this has run.
+    void attach_console_on_demand();
+    // NOCTE-END
 #endif /* SLIC3R_GUI */
 
 using namespace Slic3r;
@@ -1232,6 +1241,21 @@ int CLI::run(int argc, char **argv)
     set_current_thread_name("orcaslicer_main");
     // Save the thread ID of the main thread.
     save_main_thread_id();
+
+    // NOCTE-BEGIN nocte-lan
+#ifdef SLIC3R_GUI
+    // The LAN Developer Mode probe replaces the whole run, before any option parsing, any config
+    // load and any GUI. It reads NOCTE_LAN_IP / _SERIAL / _ACCESS_CODE itself and never sends a
+    // print command. See docs/ADR/ADR-002 and src/slic3r/Utils/Nocte/NocteLanProbe.hpp.
+    {
+        const char* nocte_lan_probe = boost::nowide::getenv("NOCTE_LAN_PROBE");
+        if (nocte_lan_probe != nullptr && std::string(nocte_lan_probe) == "1") {
+            attach_console_on_demand();
+            return Slic3r::Nocte::run_lan_probe();
+        }
+    }
+#endif /* SLIC3R_GUI */
+    // NOCTE-END
 
 #ifdef __WXGTK__
     // ------------------------------------------------------------------
@@ -6084,10 +6108,9 @@ int CLI::run(int argc, char **argv)
     global_begin_time = global_current_time;
 
     // NOCTE-BEGIN nocte-rename
-    // NOCTE-TODO(W5): --nocte-lan-probe action. Declare it in CLIActionsConfigDef
-    // (PrintConfig.cpp:11836, next to "info" at :11982) and handle it in this chain. It needs no
-    // model, so it should also be short-circuited next to the --inspect-mesh / --export-settings
-    // pre-checks above (around line 1429) rather than waiting for the load to finish.
+    // The LAN Developer Mode probe deliberately does NOT live in this action chain: declaring it
+    // would mean an entry in CLIActionsConfigDef (PrintConfig.cpp), and the probe needs no model,
+    // no config and no GUI. It runs from NOCTE_LAN_PROBE=1 at the very top of CLI::run instead.
     // NOCTE-END
     for (auto const &opt_key : m_actions) {
         if (opt_key == "help") {

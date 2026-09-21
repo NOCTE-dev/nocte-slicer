@@ -6,6 +6,9 @@
 #include "QidiPrinterAgent.hpp"
 #include "SnapmakerPrinterAgent.hpp"
 #include "MoonrakerPrinterAgent.hpp"
+// NOCTE-BEGIN nocte-lan
+#include "Nocte/NocteLanPrinterAgent.hpp"
+// NOCTE-END
 #include "slic3r/plugin/PluginManager.hpp"
 #include "slic3r/plugin/pluginTypes/printerAgent/PrinterAgentPluginCapability.hpp"
 #include "CrealityPrintAgent.hpp"
@@ -68,6 +71,28 @@ template<typename T> void register_agent()
                                                     return agent;
                                                 });
 }
+
+// NOCTE-BEGIN nocte-lan
+// One NocteLanPrinterAgent serves both registry ids it is registered under. The cache in
+// create_printer_agent_by_id() is keyed by id, so a plain factory would build a second agent -
+// and a second MQTT session against the same printer - the first time the user moved between
+// the "nocte-lan" entry and the "bbl" alias.
+std::shared_ptr<IPrinterAgent> create_nocte_lan_agent(std::shared_ptr<ICloudServiceAgent> cloud_agent, const std::string& log_dir)
+{
+    static std::mutex                          instance_mutex;
+    static std::weak_ptr<NocteLanPrinterAgent> instance;
+
+    std::lock_guard<std::mutex> lock(instance_mutex);
+    auto                        agent = instance.lock();
+    if (!agent) {
+        agent    = std::make_shared<NocteLanPrinterAgent>(log_dir);
+        instance = agent;
+    }
+    if (cloud_agent)
+        agent->set_cloud_agent(cloud_agent);
+    return agent;
+}
+// NOCTE-END
 
 } // anonymous namespace
 
@@ -179,7 +204,24 @@ void NetworkAgentFactory::register_all_agents()
     // NOCTE-BEGIN nocte-offline
     // Upstream registers BBLPrinterAgent here: a thunk layer over Bambu's proprietary network
     // plugin, which NØCTE Slicer never ships or loads (ADR-002, ADR-003). Bambu Lab printers are
-    // served by the NØCTE LAN Developer Mode agent, registered below once it exists.
+    // served by the NØCTE LAN Developer Mode agent, registered below.
+    // NOCTE-END
+
+    // NOCTE-BEGIN nocte-lan
+    {
+        const AgentInfo info = NocteLanPrinterAgent::get_agent_info_static();
+        register_printer_agent(info.id, info.name, &create_nocte_lan_agent);
+
+        // ... and again under the id the BBL agent used to own. GUI_App::resolve_printer_agent_id()
+        // maps an empty `printer_agent` on a Bambu Lab preset to BBL_PRINTER_AGENT_ID, and
+        // switch_printer_agent() clears the live agent when that id is unregistered - so without
+        // this alias every existing Bambu preset would silently have no agent at all. The alias
+        // hands out the same instance, and canonical_printer_agent_id() keeps storing the empty
+        // default for it. The cost is a second row in the Preferences dropdown; the intended
+        // replacement is a three-line hunk in resolve_printer_agent_id(), in the PR that owns
+        // GUI_App.cpp.
+        register_printer_agent(BBL_PRINTER_AGENT_ID, "Bambu Lab (NØCTE LAN Developer Mode)", &create_nocte_lan_agent);
+    }
     // NOCTE-END
 }
 
