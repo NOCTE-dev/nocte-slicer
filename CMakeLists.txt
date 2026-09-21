@@ -1323,8 +1323,13 @@ endif ()
 install(FILES ${CMAKE_SOURCE_DIR}/LICENSE.txt DESTINATION ".")
 configure_file(${LIBDIR}/dev-utils/platform/unix/fhs.hpp.in ${LIBDIR_BIN}/dev-utils/platform/unix/fhs.hpp)
 
-set (CPACK_PACKAGE_NAME "OrcaSlicer")
-set (CPACK_PACKAGE_VENDOR "SoftFever")
+# NOCTE-BEGIN nocte-product
+# Package name doubles as the default install directory (Program Files\<name>) and the Start Menu
+# folder, so it must differ from OrcaSlicer's or the installer would write over an existing
+# OrcaSlicer installation.
+set (CPACK_PACKAGE_NAME "NocteSlicer")
+set (CPACK_PACKAGE_VENDOR "NOCTE Engineering")
+# NOCTE-END
 set (CPACK_PACKAGE_VERSION_MAJOR "${ORCA_VERSION_MAJOR}")
 set (CPACK_PACKAGE_VERSION_MINOR "${ORCA_VERSION_MINOR}")
 set (CPACK_PACKAGE_VERSION_PATCH "${ORCA_VERSION_PATCH}")
@@ -1347,8 +1352,13 @@ set (CPACK_NSIS_MUI_ICON "${CPACK_PACKAGE_ICON}")
 set (CPACK_NSIS_MUI_UNIICON "${CPACK_PACKAGE_ICON}")
 set (CPACK_NSIS_INSTALLED_ICON_NAME  "$INSTDIR\\\\orca-slicer.exe")
 set (CPACK_PACKAGE_CHECKSUM SHA256)
-set (CPACK_PACKAGE_INSTALL_REGISTRY_KEY "OrcaSlicer")
-set (CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+# NOCTE-BEGIN nocte-product
+# The NSIS installer must never touch an OrcaSlicer installation on the same machine: its own
+# registry key, and no "uninstall the previous version first" step, which with the upstream key
+# would have offered to remove the user's real OrcaSlicer (ADR-003).
+set (CPACK_PACKAGE_INSTALL_REGISTRY_KEY "NocteSlicer")
+set (CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL OFF)
+# NOCTE-END
 set (CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
 # set (CPACK_NSIS_MODIFY_PATH "ON")
 set(CPACK_PACKAGE_EXECUTABLES "orca-slicer;OrcaSlicer")

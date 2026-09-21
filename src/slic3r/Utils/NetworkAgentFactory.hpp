@@ -141,6 +141,13 @@ public:
      */
     static std::shared_ptr<ICloudServiceAgent> create_cloud_agent(const std::string& provider, const std::string& log_dir)
     {
+        // NOCTE-BEGIN nocte-offline
+        // No cloud provider is ever instantiated in NØCTE Slicer (ADR-003). Kept as a function so
+        // the callers upstream adds over time keep compiling; they all handle a null agent.
+        (void) provider;
+        (void) log_dir;
+        return nullptr;
+        // NOCTE-END
         if (provider == ORCA_CLOUD_PROVIDER) {
             return std::make_shared<OrcaCloudServiceAgent>(log_dir);
         } else if (provider == BBL_CLOUD_PROVIDER) {
