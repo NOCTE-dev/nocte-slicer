@@ -48,6 +48,9 @@
 #include "Gizmos/GLGizmoScale.hpp"
 
 #include "libslic3r/TriangleMeshDeal.hpp"
+// NOCTE-BEGIN nocte-panels
+#include "Nocte/NocteUi.hpp"
+// NOCTE-END
 namespace Slic3r
 {
 namespace GUI
@@ -1668,6 +1671,19 @@ void ObjectList::show_context_menu(const bool evt_context_menu)
         else if (evt_context_menu)
             menu = plater->default_menu();
     }
+
+    // NOCTE-BEGIN nocte-panels
+    // ADR-003 section 2: the NOCTE panels are reachable from the object and part context menus.
+    // The `type` above is scoped to the single-selection branch, so it is read again here from the
+    // same source. The call is idempotent by contract (NocteUi.hpp:22-28), which it has to be:
+    // these menus are long-lived singletons owned by the Plater, and show_context_menu() hands the
+    // same wxMenu out again on every right click.
+    if (menu != nullptr && ! multiple_selection()) {
+        const wxDataViewItem nocte_item = GetSelection();
+        if (nocte_item)
+            Slic3r::GUI::Nocte::append_object_menu_items(menu, int(m_objects_model->GetItemType(nocte_item)));
+    }
+    // NOCTE-END
 
     if (menu)
         plater->PopupMenu(menu);

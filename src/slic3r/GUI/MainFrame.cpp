@@ -62,6 +62,9 @@
 #include "Widgets/WebView.hpp"
 #include "DailyTips.hpp"
 #include "FilamentMapDialog.hpp"
+// NOCTE-BEGIN nocte-panels
+#include "Nocte/NocteUi.hpp"
+// NOCTE-END
 
 #include "DeviceCore/DevManager.h"
 
@@ -3366,21 +3369,10 @@ void MainFrame::init_menubar_as_editor()
     // The NOCTE menu, next to Help, in the top-bar drop-down (ADR-003 section 2).
     //   BBLTopbar::AddDropDownSubMenu(wxMenu* sub_menu, const wxString& title)  BBLTopbar.hpp:62
     //     -> m_top_menu.AppendSubMenu(sub_menu, title)                          BBLTopbar.cpp:501
-    //   append_menu_item(wxMenu*, int, const wxString&, const wxString&,
-    //                    std::function<void(wxCommandEvent&)>, const std::string& icon,
-    //                    wxEvtHandler*, std::function<bool()>, wxWindow*, int)  wxExtensions.hpp:32
-    // NOCTE-TODO(W4): the real menu is built by
-    //     wxMenu* nocte_menu = Slic3r::GUI::Nocte::create_main_menu(this);   // NocteUi.hpp:22
-    // which lands with src/slic3r/GUI/Nocte/NocteMenu.cpp in a later PR. Until that file exists
-    // the menu is built inline with a single entry, so the drop-down is present and testable.
-    {
-        wxMenu*  nocte_menu  = new wxMenu();
-        wxString nocte_about = wxString::FromUTF8("&About N\xC3\x98" "CTE Slicer");
-        append_menu_item(nocte_menu, wxID_ANY, nocte_about, nocte_about,
-            [](wxCommandEvent&) { Slic3r::GUI::about(); }, "", nullptr,
-            []() { return true; }, this);
-        m_topbar->AddDropDownSubMenu(nocte_menu, wxString::FromUTF8("N\xC3\x98" "CTE"));
-    }
+    // The entries, their enable predicates and the two panels behind them live in
+    // src/slic3r/GUI/Nocte/NocteMenu.cpp.
+    m_topbar->AddDropDownSubMenu(Slic3r::GUI::Nocte::create_main_menu(this),
+                                 wxString::FromUTF8("N\xC3\x98" "CTE"));
     // NOCTE-END
 
     // SoftFever calibrations
@@ -3608,17 +3600,8 @@ void MainFrame::init_menubar_as_editor()
     // NOCTE-BEGIN nocte-identity
     // The NOCTE menu in the plain menu-bar branch, next to Help (ADR-003 section 2). Appended
     // after Help so the index in the _MSW_DARK_MODE EnableTop() call below does not move.
-    // NOCTE-TODO(W4): replace the inline menu with
-    //     wxMenu* nocte_menu = Slic3r::GUI::Nocte::create_main_menu(this);   // NocteUi.hpp:22
-    // once src/slic3r/GUI/Nocte/NocteMenu.cpp exists.
-    {
-        wxMenu*  nocte_menu  = new wxMenu();
-        wxString nocte_about = wxString::FromUTF8("&About N\xC3\x98" "CTE Slicer");
-        append_menu_item(nocte_menu, wxID_ANY, nocte_about, nocte_about,
-            [](wxCommandEvent&) { Slic3r::GUI::about(); }, "", nullptr,
-            []() { return true; }, this);
-        m_menubar->Append(nocte_menu, wxString::FromUTF8("&N\xC3\x98" "CTE"));
-    }
+    m_menubar->Append(Slic3r::GUI::Nocte::create_main_menu(this),
+                      wxString::FromUTF8("&N\xC3\x98" "CTE"));
     // NOCTE-END
     SetMenuBar(m_menubar);
 

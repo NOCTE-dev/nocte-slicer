@@ -794,6 +794,12 @@ set(SLIC3R_GUI_SOURCES
     GUI/Nocte/DataDirMigrationRules.hpp
     GUI/Nocte/MigrationDialog.cpp
     GUI/Nocte/MigrationDialog.hpp
+    GUI/Nocte/NocteMenu.cpp
+    GUI/Nocte/NocteMenu.hpp
+    GUI/Nocte/DiagnoseDialog.cpp
+    GUI/Nocte/DiagnoseDialog.hpp
+    GUI/Nocte/AutoTuneDialog.cpp
+    GUI/Nocte/AutoTuneDialog.hpp
 # NOCTE-END
 )
 
