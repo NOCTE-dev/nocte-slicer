@@ -2,7 +2,11 @@
 #define __SLIC3R_VERSION_H
 
 #define SLIC3R_APP_NAME "@SLIC3R_APP_NAME@"
-#define SLIC3R_APP_KEY "@SLIC3R_APP_KEY@"
+// NOCTE-BEGIN nocte-rename
+// The runtime key (data directory, configuration file, translation catalog) is NocteSlicer;
+// the CMake variable SLIC3R_APP_KEY keeps OrcaSlicer for the packaging templates. See version.inc.
+#define SLIC3R_APP_KEY "@SLIC3R_RUNTIME_APP_KEY@"
+// NOCTE-END
 #define SLIC3R_VERSION "@SLIC3R_VERSION@"
 #define SoftFever_VERSION "@SoftFever_VERSION@"
 #define SLIC3R_BUILD_ID "@SLIC3R_BUILD_ID@"

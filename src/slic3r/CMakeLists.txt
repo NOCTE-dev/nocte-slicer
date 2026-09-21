@@ -784,6 +784,17 @@ set(SLIC3R_GUI_SOURCES
     Utils/wxInspectorPlugins/CustomWidgetsPlugin.hpp
     Utils/wxInspectorPlugins/CustomWidgetsPlugin.cpp
     Utils/wxInspectorPlugins/Registration.hpp
+# NOCTE-BEGIN nocte-gui
+    GUI/Nocte/NocteUi.hpp
+    GUI/Nocte/OfflinePolicy.cpp
+    GUI/Nocte/OfflinePolicy.hpp
+    GUI/Nocte/DataDirMigration.cpp
+    GUI/Nocte/DataDirMigration.hpp
+    GUI/Nocte/DataDirMigrationRules.cpp
+    GUI/Nocte/DataDirMigrationRules.hpp
+    GUI/Nocte/MigrationDialog.cpp
+    GUI/Nocte/MigrationDialog.hpp
+# NOCTE-END
 )
 
 add_subdirectory(GUI/DeviceCore)

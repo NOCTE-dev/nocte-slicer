@@ -50,8 +50,12 @@ UPSTREAM_TOUCH_POINTS = (
     "src/slic3r/GUI/BBLTopbar.cpp",
     "src/slic3r/GUI/WebGuideDialog.cpp",
     "src/CMakeLists.txt",
+    "src/libslic3r/libslic3r_version.h.in",
     "src/dev-utils/platform/msw/OrcaSlicer.rc.in",
+    "src/slic3r/Utils/Process.cpp",
     "scripts/run_gettext.bat",
+    "scripts/run_gettext.sh",
+    "scripts/HintsToPot.py",
     "scripts/test_build_win.ps1",
 )
 

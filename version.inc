@@ -6,19 +6,20 @@ set(SLIC3R_APP_NAME "NOCTE Slicer")
 # NOCTE-END
 
 # NOCTE-BEGIN nocte-rename
-# SLIC3R_APP_KEY is renamed (ADR-003 section 3). It names, in one move:
-#   * the data directory   %APPDATA%\<key>, ~/.config/<key>, ~/Library/Application Support/<key>
-#   * the configuration file  <key>.conf   (AppConfig::config_path)
-#   * the translation catalog <key>.mo     (wxLocale::AddCatalog(SLIC3R_APP_KEY))
-# so the catalog file names under localization/i18n/** and the gettext targets must be renamed
-# in the same commit, or every translation is silently lost. First start with an empty NOCTE
-# data directory offers to import an OrcaSlicer one (src/slic3r/GUI/Nocte/DataDirMigration.cpp).
+# Two keys (ADR-003 section 3):
+#   * SLIC3R_RUNTIME_APP_KEY becomes the SLIC3R_APP_KEY macro in libslic3r_version.h. It names
+#     the data directory (%APPDATA%\<key>, ~/.config/<key>, ~/Library/Application Support/<key>),
+#     the configuration file <key>.conf and the translation catalog <key>.mo, so the catalog
+#     file names under localization/i18n/** and the gettext scripts carry the same name.
+#     First start with an empty NOCTE data directory offers to import an OrcaSlicer one
+#     (src/slic3r/GUI/Nocte/DataDirMigration.cpp).
+#   * SLIC3R_APP_KEY stays OrcaSlicer for the packaging templates that derive file names from it
+#     (the Linux AppImage script, the macOS Info.plist, the FHS share directory). Renaming those
+#     is deferred with the rest of the Linux/macOS packaging identity.
 # Deliberately NOT renamed: the library OrcaSlicer.dll and its orcaslicer_main export, the CMake
 # project and target names, and the unix binary name orca-slicer (src/CMakeLists.txt:166-167).
-# Note for the integrator: the Linux AppImage and macOS bundle templates also read
-# @SLIC3R_APP_KEY@ (src/dev-utils/platform/unix/build_appimage.sh.in,
-# src/dev-utils/platform/osx/Info.plist.in) - see docs/block3/W3-integrator.md.
-set(SLIC3R_APP_KEY "NocteSlicer")
+set(SLIC3R_APP_KEY "OrcaSlicer")
+set(SLIC3R_RUNTIME_APP_KEY "NocteSlicer")
 # NOCTE-END
 
 if(NOT DEFINED BBL_INTERNAL_TESTING)

@@ -537,7 +537,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ github.repository == 'OrcaSlicer/OrcaSlicer' && format('OrcaSlicer_Windows_{0}{1}', env.ver, env.ARCH_SUFFIX) || format('nocte-slicer-windows-{0}-installer', inputs.arch) }}
-          path: ${{ github.workspace }}/${{ env.BUILD_DIR }}/OrcaSlicer*.exe
+          path: ${{ github.workspace }}/${{ env.BUILD_DIR }}/NocteSlicer*.exe
       # NOCTE-END
 
       # NOCTE-BEGIN ci

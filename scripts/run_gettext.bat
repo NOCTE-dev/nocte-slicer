@@ -10,12 +10,16 @@ for %%a in (%*) do (
 )
 
 set "list_file=./localization/i18n/list.txt"
-set "pot_file=./localization/i18n/OrcaSlicer.pot"
+REM NOCTE-BEGIN nocte-rename
+set "pot_file=./localization/i18n/NocteSlicer.pot"
+REM NOCTE-END
 set "filtered_list=%TEMP%\orca_gettext_filtered_%RANDOM%_%RANDOM%.txt"
 set "missing_list=%TEMP%\orca_gettext_missing_%RANDOM%_%RANDOM%.txt"
 set "generated_root=%TEMP%\orca_gettext_generated_%RANDOM%_%RANDOM%"
 set "generated_i18n=%generated_root%\i18n"
-set "generated_pot=%generated_i18n%\OrcaSlicer.pot"
+REM NOCTE-BEGIN nocte-rename
+set "generated_pot=%generated_i18n%\NocteSlicer.pot"
+REM NOCTE-END
 set "has_sources=0"
 set "script_exit_code=0"
 
@@ -119,7 +123,9 @@ exit /b %errorlevel%
 :processFile
     set "file=%~1"
     set "name=%~n1"
-    set "lang=%name:OrcaSlicer_=%"
+    REM NOCTE-BEGIN nocte-rename
+    set "lang=%name:NocteSlicer_=%"
+    REM NOCTE-END
     if %FULL_MODE%==1 if exist "%pot_file%" (
         set "merged_file=%TEMP%\orca_gettext_merged_%RANDOM%_%RANDOM%.po"
         .\tools\msgmerge.exe -N --no-wrap -o "!merged_file!" "%file%" "%pot_file%"
@@ -132,7 +138,9 @@ exit /b %errorlevel%
         if errorlevel 1 exit /b 1
     )
     if not exist "./resources/i18n/!lang!" mkdir "./resources/i18n/!lang!"
-    .\tools\msgfmt.exe --check-format -o "./resources/i18n/!lang!/OrcaSlicer.mo" "%file%"
+    REM NOCTE-BEGIN nocte-rename
+    .\tools\msgfmt.exe --check-format -o "./resources/i18n/!lang!/NocteSlicer.mo" "%file%"
+    REM NOCTE-END
     if errorlevel 1 (
         echo Error encountered with msgfmt command for language !lang!.
         exit /b 1
