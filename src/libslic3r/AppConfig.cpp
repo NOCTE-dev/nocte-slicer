@@ -360,6 +360,10 @@ void AppConfig::set_defaults()
     if (get("dark_color_mode").empty())
         set("dark_color_mode", "1");
 #endif
+    // English by default; GUI_App::load_language() would otherwise pick the system language.
+    // Preferences > Language writes this key, so the choice sticks.
+    if (get("language").empty())
+        set("language", "en");
 // NOCTE-END
 
 #ifdef _WIN32

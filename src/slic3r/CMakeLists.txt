@@ -732,6 +732,16 @@ set(SLIC3R_GUI_SOURCES
     Utils/OrcaCloudServiceAgent.hpp
     Utils/OrcaPrinterAgent.cpp
     Utils/OrcaPrinterAgent.hpp
+# NOCTE-BEGIN nocte-lan
+    Utils/Nocte/NocteMqttClient.cpp
+    Utils/Nocte/NocteMqttClient.hpp
+    Utils/Nocte/NocteFtps.cpp
+    Utils/Nocte/NocteFtps.hpp
+    Utils/Nocte/NocteLanPrinterAgent.cpp
+    Utils/Nocte/NocteLanPrinterAgent.hpp
+    Utils/Nocte/NocteLanProbe.cpp
+    Utils/Nocte/NocteLanProbe.hpp
+# NOCTE-END
     Utils/QidiPrinterAgent.cpp
     Utils/QidiPrinterAgent.hpp
     Utils/SnapmakerPrinterAgent.cpp
@@ -794,6 +804,12 @@ set(SLIC3R_GUI_SOURCES
     GUI/Nocte/DataDirMigrationRules.hpp
     GUI/Nocte/MigrationDialog.cpp
     GUI/Nocte/MigrationDialog.hpp
+    GUI/Nocte/NocteMenu.cpp
+    GUI/Nocte/NocteMenu.hpp
+    GUI/Nocte/DiagnoseDialog.cpp
+    GUI/Nocte/DiagnoseDialog.hpp
+    GUI/Nocte/AutoTuneDialog.cpp
+    GUI/Nocte/AutoTuneDialog.hpp
 # NOCTE-END
 )
 

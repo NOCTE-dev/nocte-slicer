@@ -291,3 +291,6 @@ src/slic3r/GUI/PrinterWebViewHandler.cpp
 src/slic3r/GUI/AMSDryControl.cpp
 src/slic3r/GUI/AMSDryControl.hpp
 src/libslic3r/PresetBundle.cpp
+src/slic3r/GUI/Nocte/NocteMenu.cpp
+src/slic3r/GUI/Nocte/DiagnoseDialog.cpp
+src/slic3r/GUI/Nocte/AutoTuneDialog.cpp

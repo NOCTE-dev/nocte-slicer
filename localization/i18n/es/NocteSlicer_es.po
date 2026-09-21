@@ -24697,3 +24697,192 @@ msgstr ""
 
 #~ msgid "preparing, export 3MF failed!"
 #~ msgstr "Preparando; ¡Error al exportar 3MF!"
+
+# NOCTE Slicer - diagnose and repair / auto-tune panels (ADR-003 section 2).
+# AI Translated
+
+msgid "Diagnose and repair selected object..."
+msgstr "Diagnosticar y reparar el objeto seleccionado..."
+
+msgid "Auto-tune selected part..."
+msgstr "Ajustar automáticamente la pieza seleccionada..."
+
+msgid "Check the selected object for mesh errors and repair them step by step"
+msgstr "Busca errores de malla en el objeto seleccionado y los repara paso a paso"
+
+msgid "Measure the selected part and propose print settings for it"
+msgstr "Mide la pieza seleccionada y propone ajustes de impresión para ella"
+
+msgid "Blocking"
+msgstr "Bloqueante"
+
+msgid "Diagnose and repair"
+msgstr "Diagnosticar y reparar"
+
+msgid "Issues found"
+msgstr "Problemas encontrados"
+
+msgid "Issue"
+msgstr "Problema"
+
+msgid "Severity"
+msgstr "Gravedad"
+
+msgid "Occurrences"
+msgstr "Cantidad"
+
+msgid "Explanation"
+msgstr "Explicación"
+
+msgid "Repair plan"
+msgstr "Plan de reparación"
+
+msgid "Apply selected"
+msgstr "Aplicar seleccionados"
+
+msgid "Undo last"
+msgstr "Deshacer el último"
+
+#, c-format, boost-format
+msgid "Facets: %d    Open edges: %d    Shells: %d"
+msgstr "Caras: %d    Aristas abiertas: %d    Cascarones: %d"
+
+msgid "The mesh is manifold."
+msgstr "La malla es manifold (cerrada y sin bordes abiertos)."
+
+msgid "The mesh is not manifold."
+msgstr "La malla no es manifold (tiene bordes abiertos o compartidos por más de dos caras)."
+
+#, c-format, boost-format
+msgid "Inspecting part: %s"
+msgstr "Analizando la pieza: %s"
+
+#, c-format, boost-format
+msgid "This object has %d model parts; this panel works on one part at a time."
+msgstr "Este objeto tiene %d piezas de modelo; este panel trabaja con una pieza a la vez."
+
+#, c-format, boost-format
+msgid "Checks skipped: %s"
+msgstr "Comprobaciones omitidas: %s"
+
+#, c-format, boost-format
+msgid "tier %d"
+msgstr "nivel %d"
+
+msgid "lossy"
+msgstr "con pérdida"
+
+msgid "not available in this build"
+msgstr "no disponible en esta versión"
+
+msgid "applied"
+msgstr "aplicado"
+
+msgid "rejected"
+msgstr "rechazado"
+
+msgid "failed"
+msgstr "fallido"
+
+msgid "The mesh is clean. No repair is needed."
+msgstr "La malla está limpia. No hace falta ninguna reparación."
+
+msgid "Select a step to see why it is proposed."
+msgstr "Selecciona un paso para ver por qué se propone."
+
+msgid "Select a step first."
+msgstr "Selecciona primero un paso."
+
+msgid "This step cannot be run in this build."
+msgstr "Este paso no se puede ejecutar en esta versión."
+
+#, c-format, boost-format
+msgid "The step failed: %s"
+msgstr "El paso ha fallado: %s"
+
+#, c-format, boost-format
+msgid "Before: %d triangles, %d open edges, %d shells."
+msgstr "Antes: %d triángulos, %d aristas abiertas, %d cascarones."
+
+#, c-format, boost-format
+msgid "After: %d triangles, %d open edges, %d shells."
+msgstr "Después: %d triángulos, %d aristas abiertas, %d cascarones."
+
+msgid "There is nothing to undo."
+msgstr "No hay nada que deshacer."
+
+msgid "The last accepted step was undone."
+msgstr "Se ha deshecho el último paso aceptado."
+
+msgid "Nothing is ticked to apply."
+msgstr "No hay nada marcado para aplicar."
+
+msgid "No step changed the mesh."
+msgstr "Ningún paso ha cambiado la malla."
+
+#, c-format, boost-format
+msgid "Applied %d of %d steps; the repaired mesh is now on the plate."
+msgstr "Se han aplicado %d de %d pasos; la malla reparada ya está en la placa."
+
+msgid "Select exactly one object, or one model part of it, first."
+msgstr "Selecciona primero exactamente un objeto, o una de sus piezas de modelo."
+
+msgid "object"
+msgstr "objeto"
+
+msgid "part"
+msgstr "pieza"
+
+msgid "layer range"
+msgstr "rango de capas"
+
+msgid "Auto-tune"
+msgstr "Ajuste automático"
+
+msgid "Recommendations"
+msgstr "Recomendaciones"
+
+#, c-format, boost-format
+msgid "Volume: %.2f mm3    Solidity: %.2f    Stability: %.2f"
+msgstr "Volumen: %.2f mm3    Solidez: %.2f    Estabilidad: %.2f"
+
+#, c-format, boost-format
+msgid "Max overhang: %.1f deg    Steep overhang: %.1f %%    Min wall: %.2f mm"
+msgstr "Voladizo máximo: %.1f grados    Voladizo pronunciado: %.1f %%    Pared mínima: %.2f mm"
+
+msgid "The geometry measurements are not available in this build."
+msgstr "Las mediciones de geometría no están disponibles en esta versión."
+
+#, c-format, boost-format
+msgid "confidence %d%%"
+msgstr "confianza %d%%"
+
+#, c-format, boost-format
+msgid "scope: %s"
+msgstr "ámbito: %s"
+
+msgid "The rules propose no change for this part."
+msgstr "Las reglas no proponen ningún cambio para esta pieza."
+
+#, c-format, boost-format
+msgid "%d notes; select a recommendation to read them."
+msgstr "%d notas; selecciona una recomendación para leerlas."
+
+msgid "Select a recommendation to see the evidence behind it."
+msgstr "Selecciona una recomendación para ver la evidencia en la que se basa."
+
+#, c-format, boost-format
+msgid "Rule: %s"
+msgstr "Regla: %s"
+
+#, c-format, boost-format
+msgid "Skipped %s: there is no config at that scope."
+msgstr "Se ha omitido %s: no hay configuración en ese ámbito."
+
+#, c-format, boost-format
+msgid "Skipped %s: the proposed value is not legal for that setting."
+msgstr "Se ha omitido %s: el valor propuesto no es válido para ese ajuste."
+
+#, c-format, boost-format
+msgid "Applied %d of %d settings."
+msgstr "Se han aplicado %d de %d ajustes."
