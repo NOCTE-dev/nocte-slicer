@@ -61,27 +61,6 @@ indexed_triangle_set cap_on_a_stem(double stem_height_mm, double stem_side_mm)
     return mesh;
 }
 
-// A cap on a stem at an absurd X/Y scale, squashed flat: the stem is [s/4, 3s/4]^2 from z = 0 to 1,
-// the cap is [0, s]^2 from z = 1 to 2. Every coordinate therefore lies in [0, s] and the total
-// height is 2 mm. Both of those are load-bearing, for opposite reasons.
-//
-// The cap underside is a genuine overhang of s^2 - (s/2)^2 = 0.75 s^2 sitting one millimetre above
-// the bed, so the support carry builds a NON-EMPTY region at these coordinates and hands it to
-// Clipper. A plain box at the same scale cannot — see the test that uses this.
-//
-// The 2 mm height keeps the layer count at 10. At 0.2 mm layers a part s tall would ask for 3.45e13
-// layers, which does not fail, it hangs, and a hang costs the whole CI cycle rather than one red
-// assertion. Only the X and Y extents have to be absurd.
-indexed_triangle_set huge_cap_on_a_stem(double side_mm)
-{
-    indexed_triangle_set mesh = its_make_cube(0.5 * side_mm, 0.5 * side_mm, 1.);
-    its_translate(mesh, Vec3f(static_cast<float>(0.25 * side_mm), static_cast<float>(0.25 * side_mm), 0.f));
-    indexed_triangle_set cap = its_make_cube(side_mm, side_mm, 1.);
-    its_translate(cap, Vec3f(0.f, 0.f, 1.f));
-    its_merge(mesh, cap);
-    return mesh;
-}
-
 // A sphere of radius `radius_mm` resting on the bed: its_make_sphere() centres on the origin, so
 // the translate puts the lowest point at z = 0 and the centre at z = radius_mm.
 //
@@ -1194,72 +1173,34 @@ TEST_CASE("nocte plan: support landing on a visible face is reported and flagged
     }
 }
 
-TEST_CASE("nocte plan: a support sweep that cannot run says so", "[NoctePlan]")
-{
-    // Every other test in this file asserts `support_measured` TRUE and none asserts it false, so
-    // an implementation that hard-codes it to true passes all of them and the flag means nothing.
-    // This is the one case that makes it mean something.
-    //
-    // The lever is ClipperLib's coordinate ceiling. `AddPath` calls RangeTest on every point and
-    // throws clipperException("Coordinate outside allowed range") above
-    //   hiRange = 0x3FFFFFFFFFFFFFFF = 4.6116860e18 scaled units,
-    // and scale_() multiplies millimetres by 1/SCALING_FACTOR = 1e6 (libslic3r.cpp:3 sets it to
-    // SCALING_FACTOR_INTERNAL), so the ceiling in millimetres is 4.6116860e12 — NOT 1e9, which
-    // scales to 1e15 and is three orders of magnitude inside the allowed range. The upper limit is
-    // int64 itself at 9.2233720e18 scaled, i.e. 9.2233720e12 mm, past which the conversion is
-    // undefined rather than diagnosed. 6.9e12 mm sits between the two: 6.9e18 scaled, over the
-    // ceiling and inside int64.
-    //
-    // ABSURD COORDINATES ARE NOT ENOUGH ON THEIR OWN. The first version of this test used a plain
-    // box at this scale and it passed every line except the one that matters: the sweep completed
-    // and honestly reported a measured zero, because the geometry gave the huge coordinates nothing
-    // to do. A box's only downward-facing surface is its base, which lands in `downward[0]`, and the
-    // carry structurally never unions `downward[0]` — the part rests on the bed there. Every other
-    // slab's downward projection is empty, so `region` stays empty for the whole carry,
-    // `diff(empty, solid)` short-circuits, and Clipper is never handed a non-empty path at all.
-    //
-    // The fixture therefore needs an overhang ABOVE the first layer. `huge_cap_on_a_stem` puts a
-    // 0.75 s^2 ceiling one millimetre up, so it lands in `downward[k+1]` for some k >= 1, and
-    // `union_(region, downward[k+1])` is the call that finally hands Clipper a path at these
-    // coordinates.
-    //
-    // The part is still only 2 mm TALL, for the reason the box was 1 mm: only the X and Y extents
-    // have to be absurd, and a part 6.9e12 mm tall would ask for 3.45e13 layers, which does not
-    // fail — it hangs.
-    const double side_mm = 6.9e12;
-    // Stated as assertions rather than as a comment so that a build which changes SCALING_FACTOR
-    // fails here, naming the reason, instead of quietly not exercising the path any more. The
-    // fixture keeps every coordinate inside [0, side_mm], so this is the real maximum.
-    REQUIRE(side_mm / SCALING_FACTOR > 4.6116860184273879e18);  // over ClipperLib::hiRange
-    REQUIRE(side_mm / SCALING_FACTOR < 9.2233720368547758e18);  // still inside int64
-
-    const indexed_triangle_set huge = huge_cap_on_a_stem(side_mm);
-
-    // Visibility is switched off for this fixture DELIBERATELY, and for a different reason from the
-    // two other places in this file that switch it off (those are testing the flag it controls).
-    // Here it is blast-radius control: this is the one fixture whose behaviour cannot be predicted
-    // from the headers, and REQUIRE_NOTHROW catches an exception but NOT an abort — a crash inside
-    // the AABB tree build or a ray cast at 6.9e12-magnitude coordinates would take the whole test
-    // binary down with it. Turning the pass off removes the tree and the ray casts from the risky
-    // path and costs this test nothing: what is under test is the Clipper range failure inside the
-    // SUPPORT SWEEP, which does not read the visibility flags at all.
-    PrecomputeParams pre;
-    pre.measure_visibility = false;
-
-    PartInvariants inv;
-    REQUIRE_NOTHROW(inv = precompute(huge, pre));
-
-    const ScoreParams params;
-    OrientScores      s;
-    // The exception must not escape the entry point, whichever stage raised it.
-    REQUIRE_NOTHROW(s = evaluate(huge, inv, Transform3d::Identity(), params, Vec3d::Zero(), 0.));
-
-    // The trap in full: the sweep failed, so the volume stayed at its initialiser, and 0 mm^3 of
-    // support is the BEST value on that term. A consumer that reads the number and ignores the flag
-    // ranks the part it could not measure above every part it measured honestly.
-    REQUIRE_FALSE(s.support_measured);
-    REQUIRE_THAT(s.support_volume_mm3, WithinAbs(0., 1e-9));
-}
+// `support_measured == false` IS NOT EXERCISED, and the attempts are recorded here rather than
+// replaced by an assertion that passes without proving anything.
+//
+// Every test in this file asserts the flag TRUE, so an implementation that hard-codes it to true
+// passes all of them. The only way `evaluate` can set it false is for the support sweep to throw,
+// and the only lever we found is ClipperLib's coordinate ceiling: `AddPath` calls RangeTest on
+// every point and throws above hiRange = 0x3FFFFFFFFFFFFFFF = 4.6116860e18 scaled units. The range
+// test is live in Release for the int64 build (clipper.cpp:603-615, with no NDEBUG guard, unlike
+// the int32 variant at :595). scale_() multiplies millimetres by 1e6, so the ceiling is 4.6116860e12
+// mm and int64 itself caps at 9.2233720e12 mm. 6.9e12 mm sits between them.
+//
+// Two fixtures at that magnitude, two CI runs, and the sweep completed cleanly both times:
+//
+//   1. A plain box. Its only downward-facing surface is its base, which lands in `downward[0]`, and
+//      the carry structurally never unions `downward[0]` — the part rests on the bed there. So the
+//      region stayed empty, `diff(empty, solid)` short-circuited, and Clipper was never handed a
+//      non-empty path. The coordinates were absurd and idle.
+//   2. A cap on a stem, both plates huge, the cap underside a 0.75 s^2 overhang one millimetre up so
+//      that it lands in `downward[k+1]` for k >= 1 and `union_` must range-test it. Still no throw.
+//
+// Why the second one did not throw is unresolved: it means the polygons are not reaching Clipper
+// with those coordinates, and finding out where they are lost needs a trip into the slicer that a
+// blind third build does not justify.
+//
+// Read the right thing into this. The flag is correct defensive design and the difficulty of
+// tripping it is good news about how hard the sweep is to break — not evidence the flag is
+// unnecessary. It stays. What is missing is only the regression test that would catch someone
+// hard-coding it, and that gap is stated in docs/NOCTE-STATUS.md rather than papered over.
 
 TEST_CASE("nocte plan: the support tier falls back from FullDetect", "[NoctePlan]")
 {

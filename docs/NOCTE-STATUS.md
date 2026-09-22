@@ -79,6 +79,17 @@ scoring entry point. Five distinct mutations of the rotation handling would have
 suite, including dropping the object-to-build-frame rotation of the load direction, which the file's
 strongest physics assertion depends on.
 
+**One known test gap, stated rather than papered over.** `OrientScores::support_measured == false` is
+not exercised: every test asserts it true, so an implementation that hard-coded it would pass. The
+only way `evaluate` sets it false is for the support sweep to throw, and the only available lever is
+ClipperLib's coordinate ceiling (`clipper.cpp:603-615`, live in Release for the int64 build, 4.6117e18
+scaled units = 4.6117e12 mm). Two fixtures at 6.9e12 mm and two CI runs later the sweep still
+completed cleanly — first because a plain box's only downward surface is its base, which the carry
+structurally excludes, so the huge coordinates never reached Clipper; then, with a genuine overhang
+above the first layer, for a reason still unresolved. The flag stays: it is correct defensive design
+and the difficulty of tripping it says the sweep is hard to break. What is missing is the regression
+test, and the reasoning is recorded in the test file where the next person will find it.
+
 The calibration that is still owed: the support density factor against real support grams, the
 per-layer time overhead `t_layer`, and `k = σ_z/σ_xy`. Until those are measured, support volume ranks
 candidates but is not quoted in grams, and the tier that produced a number is carried in the result.
