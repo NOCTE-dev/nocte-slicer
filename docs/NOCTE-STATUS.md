@@ -20,6 +20,80 @@ Base: OrcaSlicer upstream `main` @ `6b0e190e64` (tag `nocte-base-2026-09-16`). U
 - CLI: a Bambu Studio 02.08.02 project no longer exits `-24` (checked with the old and the new binary on the same file). The `-18` fix is covered by its unit test only; no corpus file carries the `-1` values yet.
 - Open, inherited from upstream and reproduced by Bambu Studio itself: the per-part `matrix` metadata of a multi-part object is compounded again on every save (`tools/bbl-compat/NOTES.md` §7.4). Geometry is unaffected.
 
+## Planning engine (ADR-004, block 4, since 2026-09-22)
+
+The block that creates the actual advantage over Bambu Studio: the user declares what a part is
+**for** — ornament, functional by strength, functional by appearance (signage), draft — and the
+engine ranks orientations, derives a process profile and offers modifiers defined relative to the
+part. The derivation is `docs/HLSD/nocte-planning-engine.md` and it is normative: a number that
+cannot be traced to it does not reach a user.
+
+Eight PRs: A invariants and scores, B orientation engine and `--nocte-plan`, C stable object id and
+the report reader, D the plan panel, E intent-aware rules, F computed presets, G parametric
+modifiers, H LAN printing. Orca's `Orient.cpp` is left untouched and the NØCTE engine is written
+beside it, for the reasons in ADR-004 §1.
+
+**PR-A (in flight).** `Nocte/Plan/PartInvariants` measures once what a rotation cannot change
+(facet areas and normals, volume, centroid, hull, self-occlusion visibility), so a candidate costs
+one pass over flat arrays instead of the two whole-mesh copies `Orient.cpp` makes per candidate.
+`Nocte/Plan/Scores` implements the five terms in their own physical units and the dimensionless
+combination. 27 test cases.
+
+Five specification errors were caught during PR-A, all of the same family — a parameter or formula
+that silently does nothing, or measures a quantity that looks right and is not. None was found by
+reading the specification; each was found by tracing a formula through a concrete part:
+
+1. The support volume summed **interface** areas one layer thick instead of **column** volumes. A
+   flat overhang of area A at height H scored `ρ·A·h` instead of `ρ·A·H`: wrong by the height of the
+   part, and the height is exactly what the orientation changes, so it could invert the ranking on
+   the term every other term is ranked against. Replaced by the top-down carry.
+2. `support_on_build_plate_only` could not be honoured in that formulation and was deleted rather
+   than left as a flag that provably does nothing.
+3. `overhang_threshold_deg` was read by tier 0 and silently ignored by tier 1, the default path,
+   because `slice_mesh_slabs` returns every downward-facing facet regardless of angle. Tier 1 now
+   slices a sub-mesh filtered to the steep facets. A sphere on the bed was over-charged by
+   `2 + 2√2 = 4.83`; a flat ceiling cannot expose this, which is why the test suite uses the sphere.
+4. The footprint was the part's **silhouette** (`project_mesh` over the whole Z range) instead of its
+   **bed contact**. A 20 × 20 mm cap on a 4 × 4 mm stem reported 400 mm² instead of 16 mm², giving
+   `S = 0.88` where the truth is `S = 0.18` — it passed the `S ≥ 0.35` gate it should have failed,
+   and a sphere resting on a point scored as stable as a cube. `GeometryAnalysis.cpp:93-103` already
+   defined footprint as first-layer contact, so the fork was shipping two meanings of one word in one
+   subsystem. Every stability fixture in the test suite was prismatic from the bed up, where the two
+   definitions coincide, which is why it survived.
+
+5. The cusp term returned three zeros — the **best** value on that axis — when no facet survived the
+   visible-and-non-flat filter, with no way for a caller to tell that apart from a perfect surface.
+   Reachable from an ordinary inverted STL: the centroid is still correct so the part passes every
+   other gate, but every self-occlusion ray starts inside the surface and reports the whole part
+   invisible, so the term silently stops discriminating on every candidate.
+
+A related discipline the reviews tightened: any field that can be a *silent* zero now carries a flag
+(`support_measured`, `contact_measured`, `cusp_measured`), because zero is the best possible score on
+those terms, and a part we failed to measure must never outrank one we measured honestly. The
+combination step cannot enforce this itself without desynchronising its output from its input, so the
+obligation is written into its contract and into the HLSD, at the layer that owns it.
+
+The reviews also found that all 34 `evaluate()` calls in the test file passed the identity transform,
+so the orientation engine's reason to exist — ranking rotations — was never exercised through the
+scoring entry point. Five distinct mutations of the rotation handling would have passed the entire
+suite, including dropping the object-to-build-frame rotation of the load direction, which the file's
+strongest physics assertion depends on.
+
+**One known test gap, stated rather than papered over.** `OrientScores::support_measured == false` is
+not exercised: every test asserts it true, so an implementation that hard-coded it would pass. The
+only way `evaluate` sets it false is for the support sweep to throw, and the only available lever is
+ClipperLib's coordinate ceiling (`clipper.cpp:603-615`, live in Release for the int64 build, 4.6117e18
+scaled units = 4.6117e12 mm). Two fixtures at 6.9e12 mm and two CI runs later the sweep still
+completed cleanly — first because a plain box's only downward surface is its base, which the carry
+structurally excludes, so the huge coordinates never reached Clipper; then, with a genuine overhang
+above the first layer, for a reason still unresolved. The flag stays: it is correct defensive design
+and the difficulty of tripping it says the sweep is hard to break. What is missing is the regression
+test, and the reasoning is recorded in the test file where the next person will find it.
+
+The calibration that is still owed: the support density factor against real support grams, the
+per-layer time overhead `t_layer`, and `k = σ_z/σ_xy`. Until those are measured, support volume ranks
+candidates but is not quoted in grams, and the tier that produced a number is carried in the result.
+
 ## Engine (`src/libslic3r/Nocte/`)
 
 **Implemented and unit-tested**

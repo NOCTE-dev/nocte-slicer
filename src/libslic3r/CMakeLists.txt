@@ -515,6 +515,10 @@ set(lisbslic3r_sources
     Nocte/MeshRepair.hpp
     Nocte/GeometryAnalysis.cpp
     Nocte/GeometryAnalysis.hpp
+    Nocte/Plan/PartInvariants.cpp
+    Nocte/Plan/PartInvariants.hpp
+    Nocte/Plan/Scores.cpp
+    Nocte/Plan/Scores.hpp
     Nocte/AutoTune.cpp
     Nocte/AutoTune.hpp
     Nocte/Rules/RuleSet.hpp
