@@ -37,6 +37,13 @@ enum class SupportTier : uint8_t {
     FullDetect = 2,  // needs a PrintObject at posSlice; not reachable from this header
 };
 
+// "facet-sweep" / "slice-union" / "full-detect". These strings are written into the --nocte-plan
+// JSON and into the project report, so they are a persisted format and belong beside the enum
+// rather than in whichever file happens to serialise it. A tier that a reader cannot name is a tier
+// a reader will ignore, and the whole point of carrying it is that a tier-0 number must never be
+// mistaken for a tier-1 one.
+const char *support_tier_name(SupportTier tier);
+
 // Support volume, tier 1 — the top-down column carry
 // --------------------------------------------------
 // Support is a COLUMN under an overhang, from the overhang down to whatever it lands on. Its volume
@@ -187,6 +194,19 @@ struct OrientScores
     double      min_section_area_mm2    = 0.;
     double      failure_force_n         = 0.;
 
+    // False when no load direction was given, and ALSO false when the section sweep was attempted
+    // and failed. `min_section_area_along` returns 0 for seven distinct events — empty mesh, zero
+    // direction, unusable Z range, degenerate height, empty plane list, a throw inside the slicer,
+    // and "no plane had positive area" — and nothing else distinguishes them.
+    //
+    // Without this flag a failed sweep is laundered twice over. The engine reads the zero as the
+    // named constraint `NoLoadSection`, so a measurement failure is reported to the user as their
+    // own missing input; and the JSON writes `0.0` for a force, which its own comment says must
+    // never happen because it reads as a part that fails under its own weight. A closed solid always
+    // has a positive section, so on the CLI path — where a missing direction is refused before the
+    // engine runs — a zero can essentially only mean the sweep broke.
+    bool        section_measured        = false;
+
     // d_min / z_com: the part tips when lateral acceleration exceeds this times g. Isotropic
     // sqrt(area)/height would average a safe direction with an unsafe one, which is why the real
     // distance from the centre of mass to the nearest footprint hull edge is used instead.
@@ -305,7 +325,9 @@ struct ScoreEpsilons
 // the field order (support, cusp, time, strength, stability), for the panel to show why. Each entry
 // is in [0, 1] with 0 the best candidate on that term, already inverted where more is better, so a
 // panel can render the row directly as a bar without knowing the sign of the underlying quantity.
-// A term whose weight is zero contributes 0 to every row.
+// A term whose weight is zero contributes 0 to every row. So does a term whose spread across the set
+// is below its indifference floor in `eps`: the candidates are then EQUAL on it, not ordered by a
+// shrunken difference. A non-finite value is not a measurement and scores 1, the worst, on its term.
 std::vector<double> combine(const std::vector<OrientScores> &candidates,
                             const ScoreWeights              &weights,
                             const ScoreEpsilons             &eps,

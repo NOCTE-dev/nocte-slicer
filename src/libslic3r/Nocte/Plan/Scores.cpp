@@ -60,10 +60,11 @@ constexpr double MIN_SLICE_STEP_MM = 1e-3;
 // a NaN is false, so both return their FIRST argument whenever the second is a NaN. A clamp
 // therefore only clamps when the KNOWN-FINITE bound comes first: max(FLOOR, x) yields FLOOR for a
 // NaN x and min(CEILING, x) yields CEILING, while the reversed spellings hand the NaN straight
-// through. An escaped NaN does not then blow up, which is exactly the danger — it normalises to 0
-// in combine(), through max(0., NaN) -> 0. and min(1., 0.) -> 0., and 0 is the BEST value on every
-// term. So: every clamp in this file puts the bound first, and every accumulator fold puts the
-// running accumulator, which is known finite, first.
+// through. An escaped NaN does not then blow up, which is exactly the danger — a clamp spelled
+// min(1., max(0., NaN)) yields 0, and 0 is the BEST value on every term. combine() therefore scores
+// a non-finite value as 1, the worst, before any clamp can see it; the rest of the file keeps NaN
+// from escaping in the first place. So: every clamp in this file puts the bound first, and every
+// accumulator fold puts the running accumulator, which is known finite, first.
 
 // Upper bound on the number of layer planes the support sweep will slice. A 300 mm part at a 0.1 mm
 // layer height is 3000 layers, and the sweep runs once per candidate orientation; past this count
@@ -95,6 +96,21 @@ constexpr double STABILITY_MAX = 100.;
 // or a value beyond INT_MAX is undefined behaviour, and on x86 it yields INT_MIN, which a later
 // "must be at least 1" clamp would silently turn into a plausible-looking 1.
 constexpr double MAX_LAYER_COUNT = 1e6;
+
+// Slack, in LAYERS, taken off a height-over-layer-height ratio before it is rounded up. A 20 mm part
+// that a rotation built from cos(PI/2) = 6.1e-17 leaves 20.000000000000004 mm tall is 100.00000000000002
+// layers, and a bare ceil() prints it as 101: one phantom layer, two seconds of phantom time, and a
+// candidate that differs from its unrotated twin by nothing but round-off.
+//
+// Double round-off alone would be cleared by 1e-9 of a layer, but it is not the largest error here.
+// Vertices are floats (~6e-8 relative), and a candidate that lays a hull face down is built from a
+// normal computed in float, so the face rests up to ~1e-7 rad off flat: a 20 mm cube laid on a face
+// that way is 20.000002 mm tall, 100.00001 layers, and 1e-9 would still hand it a 101st. Across the
+// A1's 256 mm build height at a 0.08 mm layer the same two effects reach about 4e-4 of a layer. The
+// slack is therefore 1e-2 of a layer, a factor of 25 above that; and it costs nothing real, because
+// 1e-2 of even a 0.2 mm layer is 2 micrometres, a sliver no FDM profile can print as a layer at all.
+// It is a slack on the ratio, in layers, because that is the unit of the decision being made.
+constexpr double LAYER_COUNT_ROUNDOFF = 1e-2;
 
 // Two vectors are treated as (anti)parallel when the magnitude of their dot product is within this
 // of one. At that point the cross product that a from-to quaternion needs has collapsed into
@@ -571,6 +587,20 @@ SliceUnionResult support_volume_slice_union(const indexed_triangle_set &solid_me
 
 } // namespace
 
+const char *support_tier_name(SupportTier tier)
+{
+    // These three spellings are written into the --nocte-plan JSON and into the project report, so
+    // they are a persisted format: change one and every document already produced stops matching.
+    switch (tier) {
+    case SupportTier::FacetSweep: return "facet-sweep";
+    case SupportTier::SliceUnion: return "slice-union";
+    case SupportTier::FullDetect: return "full-detect";
+    }
+    // Unreachable for a valid enumerator, and deliberately not an assert: a tier we cannot name is
+    // a reason to say so in the output, not to bring down a run that has already measured a part.
+    return "unknown";
+}
+
 double min_section_area_along(const indexed_triangle_set &its, const Vec3d &dir, const ScoreParams &params)
 {
     if (its.vertices.empty() || its.indices.empty())
@@ -689,7 +719,7 @@ OrientScores evaluate(const indexed_triangle_set &its,
         // clamp is needed for the conversion either; `height_mm` is finite by construction and
         // `step` is at least MIN_SLICE_STEP_MM, so the ratio is finite.
         double       step       = h;
-        const double raw_planes = std::ceil(scores.height_mm / step);
+        const double raw_planes = std::ceil(scores.height_mm / step - LAYER_COUNT_ROUNDOFF);
         if (raw_planes > double(SUPPORT_MAX_LAYERS)) {
             const double factor = std::ceil(raw_planes / double(SUPPORT_MAX_LAYERS));
             step = h * factor;
@@ -749,8 +779,11 @@ OrientScores evaluate(const indexed_triangle_set &its,
     // INT_MAX to int is undefined behaviour; on x86 it produces INT_MIN, and a bare "at least 1"
     // clamp afterwards would turn that into a perfectly plausible single-layer part whose time
     // estimate is then quietly wrong rather than visibly absurd.
+    //
+    // The ratio is rounded up with LAYER_COUNT_ROUNDOFF of slack, so a height that is a whole number
+    // of layers plus round-off is that whole number and not one more.
     {
-        double n_layers = std::ceil(scores.height_mm / h);
+        double n_layers = std::ceil(scores.height_mm / h - LAYER_COUNT_ROUNDOFF);
         if (! std::isfinite(n_layers) || n_layers < 1.)
             n_layers = 1.;
         scores.layer_count = static_cast<int>((std::min)(MAX_LAYER_COUNT, n_layers));
@@ -778,6 +811,13 @@ OrientScores evaluate(const indexed_triangle_set &its,
         const double sigma_all = sigma_z + (params.sigma_xy_mpa - sigma_z) * (1. - dz2);
         scores.min_section_area_mm2 = (std::max)(0., min_section_mm2);
         scores.failure_force_n      = scores.min_section_area_mm2 * sigma_all;
+        // A load direction was given, so the sweep was attempted. It is believable only if it came
+        // back with a positive section: min_section_area_along() returns 0 for seven distinct
+        // failures as well as for "no load given", and a closed solid always has a positive section
+        // normal to any direction. So a zero here means the sweep broke, not that the part is
+        // infinitely weak, and the flag is what stops that being reported as the user's own missing
+        // input or written into the JSON as a force of zero newtons.
+        scores.section_measured = scores.min_section_area_mm2 > 0.;
     }
 
     // --- footprint and stability ----------------------------------------------------------------
@@ -936,9 +976,14 @@ std::vector<double> combine(const std::vector<OrientScores> &candidates,
     // The force indifference floor is a FRACTION of the best force in this candidate set, not an
     // absolute newton value: the same 5 N difference is decisive on a 20 N bracket and irrelevant
     // on a 2 kN one.
+    //
+    // Only finite forces are folded in. A NaN would be dropped by the bound-first spelling anyway,
+    // but a +inf would not, and an infinite best force makes the floor infinite and flattens every
+    // measured force in the set to the same value.
     double best_force = 0.;
     for (const OrientScores &c : candidates)
-        best_force = (std::max)(best_force, c.failure_force_n);
+        if (std::isfinite(c.failure_force_n))
+            best_force = (std::max)(best_force, c.failure_force_n);
 
     // Raw values, all oriented so that LOWER IS BETTER before normalisation.
     //  * support, cusp and time are costs already: they are taken as they are.
@@ -983,21 +1028,51 @@ std::vector<double> combine(const std::vector<OrientScores> &candidates,
     for (size_t t = 0; t < 5; ++ t) {
         if (raw[t].empty())
             continue;
-        double lo = raw[t].front();
-        double hi = raw[t].front();
+
+        // The range is taken over the FINITE values only. A NaN is sticky through min and max in
+        // one argument order and ignored in the other, and an infinity would pin one end of the
+        // span and flatten every real value against it; either way the range would stop describing
+        // the candidates that were actually measured. Non-finite values are scored separately below.
+        bool   have_range = false;
+        double lo         = 0.;
+        double hi         = 0.;
         for (double v : raw[t]) {
-            lo = (std::min)(lo, v);
-            hi = (std::max)(hi, v);
+            if (! std::isfinite(v))
+                continue;
+            if (! have_range) {
+                lo         = v;
+                hi         = v;
+                have_range = true;
+            } else {
+                lo = (std::min)(lo, v);
+                hi = (std::max)(hi, v);
+            }
         }
-        // The span is compared against the indifference floor, never against a numerical epsilon:
-        // below the floor the candidates are declared equal on this term instead of having a
-        // meaningless difference stretched across the whole [0, 1] range.
-        double den = (std::max)((std::max)(0., term_eps[t]), hi - lo);
+
+        // The span is compared against the indifference floor, never against a numerical epsilon,
+        // and below the floor the candidates are declared EQUAL on this term: every one of them
+        // normalises to 0. That is what the floor means — "the difference below which we do not
+        // care" (HLSD §6) — and dividing by max(span, floor) alone does not deliver it: it only
+        // shrinks a sub-floor ordering, so 1000 against 1200 mm^3 of support would still come out
+        // 0 and 0.4 and still decide a ranking the floor says it must not. Bound first, so a NaN
+        // floor comes out as 0 and declares nothing equal that is not.
+        const double floor_eps   = (std::max)(0., term_eps[t]);
+        const bool   indifferent = have_range && (hi - lo) < floor_eps;
+        double den = (std::max)(floor_eps, hi - lo);
         if (! (den > 0.))
             den = 1.;
         for (size_t i = 0; i < n; ++ i) {
-            double s = (raw[t][i] - lo) / den;
-            s = (std::min)(1., (std::max)(0., s));
+            const double v = raw[t][i];
+            double       s = 0.;
+            if (! std::isfinite(v))
+                // A value that is not a number is not a measurement, and it gets the WORST value on
+                // the term rather than the best. The clamp below cannot be trusted with it:
+                // max(0., NaN) is 0 — the best — which is exactly the direction this file forbids.
+                s = 1.;
+            else if (indifferent)
+                s = 0.;
+            else
+                s = (std::min)(1., (std::max)(0., (v - lo) / den));
             result[i] += term_weights[t] * s;
             if (out_normalized)
                 (*out_normalized)[i][t] = s;

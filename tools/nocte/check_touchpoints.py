@@ -59,6 +59,10 @@ UPSTREAM_TOUCH_POINTS = (
     "scripts/HintsToPot.py",
     "scripts/test_build_win.ps1",
     "tests/slic3rutils/test_plugin_audit.cpp",
+    # ADR-004: the --nocte-plan CLI action. Its declaration has to sit in CLIActionsConfigDef
+    # beside the upstream inspect_mesh and ground_largest_face actions; the logic lives in
+    # src/libslic3r/Nocte/Plan/. This is the fork's first edit to PrintConfig.cpp.
+    "src/libslic3r/PrintConfig.cpp",
 )
 
 # Directories the fork owns outright. No marker is required inside them.
