@@ -11991,6 +11991,24 @@ CLIActionsConfigDef::CLIActionsConfigDef()
                      "the --ground-* options choose from. Machine-readable alternative to --info.");
     def->set_default_value(new ConfigOptionBool(false));
 
+// NOCTE-BEGIN nocte-plan
+    // ADR-004. The planning engine lives in libslic3r/Nocte/Plan/; this only declares its CLI
+    // action, so the engine can be driven headlessly. That is what makes it measurable before any
+    // panel exists, and a panel presenting a number nobody has checked is worse than no panel.
+    //
+    // The accompanying --nocte-intent, --nocte-load-dir and --nocte-showcase options are NOT
+    // declared here but in CLIMiscConfigDef: every key in this table becomes an action
+    // (OrcaSlicer.cpp:8025-8027), so a string option placed here would be treated as one.
+    def = this->add("nocte_plan", coBool);
+    def->label = L("NOCTE plan (JSON to stdout)");
+    def->tooltip = L("Rank the build orientations of each loaded object and print the result as JSON to stdout, "
+                     "then exit. Every candidate is reported with the quantities it was ranked on, each in its own "
+                     "physical unit: support volume, stair-step height, estimated time, load-bearing section and "
+                     "tipping margin. Use --nocte-intent to say what the part is for, which is what chooses the "
+                     "weights and the hard constraints.");
+    def->set_default_value(new ConfigOptionBool(false));
+// NOCTE-END
+
     def = this->add("export_settings", coString);
     def->label = L("Export Settings");
     def->tooltip = L("This exports settings to a file. Use - to write them to stdout.");
@@ -12157,6 +12175,35 @@ CLITransformConfigDef::CLITransformConfigDef()
 CLIMiscConfigDef::CLIMiscConfigDef()
 {
     ConfigOptionDef* def;
+
+// NOCTE-BEGIN nocte-plan
+    // Parameters of --nocte-plan (ADR-004). They live here rather than in CLIActionsConfigDef
+    // because every key in that table is collected as an action (OrcaSlicer.cpp:8025-8027).
+    def = this->add("nocte_intent", coString);
+    def->label = L("NOCTE part intent");
+    def->tooltip = L("What the part is for, which selects the ranking weights and the hard constraints: "
+                     "unspecified, ornament, functional-strength, functional-visual or draft. "
+                     "functional-visual is signage: one designated face is read and must be flawless. "
+                     "An unknown name is an error rather than a default, because silently guessing an intent "
+                     "silently re-ranks every orientation.");
+    def->set_default_value(new ConfigOptionString("unspecified"));
+
+    def = this->add("nocte_load_dir", coString);
+    def->label = L("NOCTE load direction");
+    def->tooltip = L("Direction the part carries its load, in object coordinates, as \"x,y,z\". Required by "
+                     "--nocte-intent functional-strength and ignored otherwise. FDM parts fail at the interface "
+                     "between layers, so the engine looks for an orientation that lays this direction IN the layer "
+                     "plane, rather than across the bonds between layers. On a 20x20x40 test box that is the "
+                     "difference between surviving 20000 N and 10000 N.");
+    def->set_default_value(new ConfigOptionString(""));
+
+    def = this->add("nocte_showcase", coString);
+    def->label = L("NOCTE showcase face normal");
+    def->tooltip = L("Outward normal of the face that will be looked at, in object coordinates, as \"x,y,z\". "
+                     "Required by --nocte-intent functional-visual and ignored otherwise. That face must end up "
+                     "pointing up and carrying no support, which is a hard constraint and not a preference.");
+    def->set_default_value(new ConfigOptionString(""));
+// NOCTE-END
 
     /*def = this->add("ignore_nonexistent_config", coBool);
     def->label = L("Ignore non-existent config files");

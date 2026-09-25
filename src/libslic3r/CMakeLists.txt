@@ -519,6 +519,10 @@ set(lisbslic3r_sources
     Nocte/Plan/PartInvariants.hpp
     Nocte/Plan/Scores.cpp
     Nocte/Plan/Scores.hpp
+    Nocte/Plan/PlanIntent.cpp
+    Nocte/Plan/PlanIntent.hpp
+    Nocte/Plan/OrientEngine.cpp
+    Nocte/Plan/OrientEngine.hpp
     Nocte/AutoTune.cpp
     Nocte/AutoTune.hpp
     Nocte/Rules/RuleSet.hpp

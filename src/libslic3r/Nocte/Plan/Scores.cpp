@@ -571,6 +571,20 @@ SliceUnionResult support_volume_slice_union(const indexed_triangle_set &solid_me
 
 } // namespace
 
+const char *support_tier_name(SupportTier tier)
+{
+    // These three spellings are written into the --nocte-plan JSON and into the project report, so
+    // they are a persisted format: change one and every document already produced stops matching.
+    switch (tier) {
+    case SupportTier::FacetSweep: return "facet-sweep";
+    case SupportTier::SliceUnion: return "slice-union";
+    case SupportTier::FullDetect: return "full-detect";
+    }
+    // Unreachable for a valid enumerator, and deliberately not an assert: a tier we cannot name is
+    // a reason to say so in the output, not to bring down a run that has already measured a part.
+    return "unknown";
+}
+
 double min_section_area_along(const indexed_triangle_set &its, const Vec3d &dir, const ScoreParams &params)
 {
     if (its.vertices.empty() || its.indices.empty())
@@ -778,6 +792,13 @@ OrientScores evaluate(const indexed_triangle_set &its,
         const double sigma_all = sigma_z + (params.sigma_xy_mpa - sigma_z) * (1. - dz2);
         scores.min_section_area_mm2 = (std::max)(0., min_section_mm2);
         scores.failure_force_n      = scores.min_section_area_mm2 * sigma_all;
+        // A load direction was given, so the sweep was attempted. It is believable only if it came
+        // back with a positive section: min_section_area_along() returns 0 for seven distinct
+        // failures as well as for "no load given", and a closed solid always has a positive section
+        // normal to any direction. So a zero here means the sweep broke, not that the part is
+        // infinitely weak, and the flag is what stops that being reported as the user's own missing
+        // input or written into the JSON as a force of zero newtons.
+        scores.section_measured = scores.min_section_area_mm2 > 0.;
     }
 
     // --- footprint and stability ----------------------------------------------------------------

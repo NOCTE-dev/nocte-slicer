@@ -741,6 +741,8 @@ set(SLIC3R_GUI_SOURCES
     Utils/Nocte/NocteLanPrinterAgent.hpp
     Utils/Nocte/NocteLanProbe.cpp
     Utils/Nocte/NocteLanProbe.hpp
+    Utils/Nocte/PlanToJson.cpp
+    Utils/Nocte/PlanToJson.hpp
 # NOCTE-END
     Utils/QidiPrinterAgent.cpp
     Utils/QidiPrinterAgent.hpp

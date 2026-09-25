@@ -37,6 +37,13 @@ enum class SupportTier : uint8_t {
     FullDetect = 2,  // needs a PrintObject at posSlice; not reachable from this header
 };
 
+// "facet-sweep" / "slice-union" / "full-detect". These strings are written into the --nocte-plan
+// JSON and into the project report, so they are a persisted format and belong beside the enum
+// rather than in whichever file happens to serialise it. A tier that a reader cannot name is a tier
+// a reader will ignore, and the whole point of carrying it is that a tier-0 number must never be
+// mistaken for a tier-1 one.
+const char *support_tier_name(SupportTier tier);
+
 // Support volume, tier 1 — the top-down column carry
 // --------------------------------------------------
 // Support is a COLUMN under an overhang, from the overhang down to whatever it lands on. Its volume
@@ -186,6 +193,19 @@ struct OrientScores
     // no load direction was given.
     double      min_section_area_mm2    = 0.;
     double      failure_force_n         = 0.;
+
+    // False when no load direction was given, and ALSO false when the section sweep was attempted
+    // and failed. `min_section_area_along` returns 0 for seven distinct events — empty mesh, zero
+    // direction, unusable Z range, degenerate height, empty plane list, a throw inside the slicer,
+    // and "no plane had positive area" — and nothing else distinguishes them.
+    //
+    // Without this flag a failed sweep is laundered twice over. The engine reads the zero as the
+    // named constraint `NoLoadSection`, so a measurement failure is reported to the user as their
+    // own missing input; and the JSON writes `0.0` for a force, which its own comment says must
+    // never happen because it reads as a part that fails under its own weight. A closed solid always
+    // has a positive section, so on the CLI path — where a missing direction is refused before the
+    // engine runs — a zero can essentially only mean the sweep broke.
+    bool        section_measured        = false;
 
     // d_min / z_com: the part tips when lateral acceleration exceeds this times g. Isotropic
     // sqrt(area)/height would average a safe direction with an unsafe one, which is why the real

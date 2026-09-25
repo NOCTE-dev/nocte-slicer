@@ -81,6 +81,13 @@ using namespace nlohmann;
 // NOCTE-BEGIN nocte-bbl-compat
 #include "libslic3r/Nocte/BblCompat.hpp"
 // NOCTE-END
+// NOCTE-BEGIN nocte-plan
+// The --nocte-plan action (ADR-004). The engine lives in libslic3r/Nocte/Plan/ and the JSON writer
+// beside MeshInspect in slic3r/Utils/Nocte/; this file carries the hook and no logic.
+#include "libslic3r/Nocte/Plan/PlanIntent.hpp"
+#include "libslic3r/Nocte/Plan/OrientEngine.hpp"
+#include "slic3r/Utils/Nocte/PlanToJson.hpp"
+// NOCTE-END
 
 #include "OrcaSlicer.hpp"
 #include <wx/filename.h>
@@ -1474,6 +1481,31 @@ int CLI::run(int argc, char **argv)
             flush_and_exit(CLI_INVALID_PARAMS);
         }
     }
+
+// NOCTE-BEGIN nocte-plan
+    // --nocte-plan prints JSON and returns CLI_SUCCESS, exactly as --inspect-mesh does, so it needs
+    // the same guard: without it `--nocte-plan --export-3mf out.3mf` prints the plan and exits 0
+    // having exported nothing, and a plan with no input emits an empty object list and exits 0
+    // rather than naming what is missing. Both are silent successes that did not do the work.
+    if (std::find(m_actions.begin(), m_actions.end(), "nocte_plan") != m_actions.end()) {
+        static const std::set<std::string> plan_compatible = { "nocte_plan", "uptodate", "load_defaultfila", "min_save",
+                                                               "mtcpp", "mstpp", "no_check", "normative_check", "pipe" };
+        for (const std::string &action : m_actions) {
+            if (plan_compatible.count(action) == 0) {
+                std::string flag = action;
+                std::replace(flag.begin(), flag.end(), '_', '-');
+                boost::nowide::cerr << "--nocte-plan cannot be combined with --" << flag << std::endl;
+                record_exit_reson(outfile_dir, CLI_INVALID_PARAMS, 0, cli_errors[CLI_INVALID_PARAMS], sliced_info);
+                flush_and_exit(CLI_INVALID_PARAMS);
+            }
+        }
+        if (m_input_files.empty() && m_config.opt_string("load_assemble_list").empty()) {
+            boost::nowide::cerr << "--nocte-plan needs an input file or --load-assemble-list" << std::endl;
+            record_exit_reson(outfile_dir, CLI_INVALID_PARAMS, 0, cli_errors[CLI_INVALID_PARAMS], sliced_info);
+            flush_and_exit(CLI_INVALID_PARAMS);
+        }
+    }
+// NOCTE-END
 
     // --export-settings - writes its JSON to stdout, so reject every action or transform that may write there
     // too (--info, --help, --orient, slicing and exporting). The allowed ones do nothing when nothing is
@@ -6179,6 +6211,52 @@ int CLI::run(int argc, char **argv)
             record_exit_reson(outfile_dir, CLI_SUCCESS, plate_to_slice, cli_errors[CLI_SUCCESS], sliced_info);
             boost::nowide::cerr.flush();
             return CLI_SUCCESS;
+// NOCTE-BEGIN nocte-plan
+        } else if (opt_key == "nocte_plan") {
+            // The planning engine, driven headlessly (ADR-004). Same shape as --inspect-mesh above:
+            // an action, so it satisfies the "needs an action" check and bypasses the GUI fallback,
+            // and it exits once the JSON is out.
+            Slic3r::Nocte::PlanIntent intent;
+            std::string               intent_error;
+            if (! Slic3r::Nocte::parse_plan_options(m_config, intent, intent_error)) {
+                boost::nowide::cerr << intent_error << std::endl;
+                record_exit_reson(outfile_dir, CLI_INVALID_PARAMS, 0, cli_errors[CLI_INVALID_PARAMS], sliced_info);
+                flush_and_exit(CLI_INVALID_PARAMS);
+            }
+            // An intent that is missing the input only the user can supply is refused HERE rather
+            // than planned anyway. Planning anyway does not fail cleanly: with no showcase normal
+            // the "that face points up" constraint cannot be satisfied by any candidate, the set
+            // empties, and the result reads "this part cannot be signed" when the truth is "you did
+            // not say which face is read". A wrong reason is worse than a refusal.
+            if (const char *missing = intent.missing_input()) {
+                boost::nowide::cerr << "--nocte-intent " << Slic3r::Nocte::intent_name(intent.kind)
+                                    << " needs a " << missing << "; give it with "
+                                    << (intent.kind == Slic3r::Nocte::PartIntent::FunctionalStrength
+                                            ? "--nocte-load-dir x,y,z" : "--nocte-showcase x,y,z")
+                                    << std::endl;
+                record_exit_reson(outfile_dir, CLI_INVALID_PARAMS, 0, cli_errors[CLI_INVALID_PARAMS], sliced_info);
+                flush_and_exit(CLI_INVALID_PARAMS);
+            }
+            const Slic3r::Nocte::OrientParams plan_params;
+            for (Model &model : m_models) {
+                model.add_default_instances();
+                Slic3r::Nocte::plan_to_json(model, m_input_files, intent, plan_params, boost::nowide::cout);
+            }
+            boost::nowide::cout.flush();
+            // As for --inspect-mesh: flush_and_exit() prints to stdout and would corrupt the JSON.
+#if defined(__linux__) || defined(__LINUX__)
+            if (g_cli_callback_mgr.is_started()) {
+                PrintBase::SlicingStatus slicing_status{100, "All done, Success"};
+                cli_status_callback(slicing_status);
+            }
+            g_cli_callback_mgr.stop();
+#endif
+            for (Model &m : m_models)
+                m.remove_backup_path_if_exist();
+            record_exit_reson(outfile_dir, CLI_SUCCESS, plate_to_slice, cli_errors[CLI_SUCCESS], sliced_info);
+            boost::nowide::cerr.flush();
+            return CLI_SUCCESS;
+// NOCTE-END
         } else if (opt_key == "uptodate") {
             //already processed before
         } else if (opt_key == "min_save") {

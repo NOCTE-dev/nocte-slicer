@@ -57,6 +57,7 @@ add_executable(${_TEST_NAME}_tests
     test_nocte_geometry_analysis.cpp
     test_nocte_autotune.cpp
     test_nocte_plan_scores.cpp
+    test_nocte_orient_engine.cpp
 # NOCTE-END
     ../libnest2d/printer_parts.cpp
     )

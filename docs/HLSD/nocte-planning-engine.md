@@ -277,8 +277,13 @@ set is small, arbitrary and often bimodal.
 Hard constraints are applied as a **filter before normalisation**, never as a large penalty: a
 penalty distorts the min–max range of every other term.
 
-Degenerate cases: if the filter leaves zero or one candidate, the current orientation is returned
-with confidence 0 **and the name of the constraint that emptied the set**.
+Degenerate cases: if the filter leaves **zero** candidates, the current orientation is returned
+**with the name of the constraint that emptied the set**, and flagged as degenerate.
+
+One surviving candidate is not a degenerate case and must not be treated as one. A plate imported
+face-down with a designated showcase face leaves exactly one survivor — the flip — and discarding it
+in favour of the current orientation would hand back the orientation that shows the wrong face. An
+earlier draft of this section said "zero or one" and was wrong.
 
 Two responsibilities belong to the **caller**, not to the combination step, and are named here
 because attributing them to the wrong layer is how they end up implemented nowhere:
@@ -303,7 +308,7 @@ Weights are preferences, editable and visible; the physics lives in the terms.
 |---|---|---|---|---|---|---|
 | Ornament | 0.30 | 0.45 | 0.15 | — | 0.10 | `S ≥ 0.35` |
 | Functional, strength | 0.20 | 0.05 | 0.10 | 0.50 | 0.15 | `S ≥ 0.35`, `A_min(d̂) > 0` |
-| Functional, visual (signage) | 0.25 | 0.40 (showcase face only) | 0.10 | 0.10 | 0.15 | showcase normal within 5° of `+ẑ`; `A_c = 0` on it; `S ≥ 0.35` |
+| Functional, visual (signage) | 0.25 | 0.40 | 0.10 | 0.10 | 0.15 | showcase normal within 5° of `+ẑ`; `A_c = 0` on it; `S ≥ 0.35` |
 | Draft | 0.30 | — | 0.60 | — | 0.10 | `S ≥ 0.35` |
 | Unspecified | 0.25 | 0.25 | 0.20 | 0.15 | 0.15 | `S ≥ 0.35` |
 
@@ -335,5 +340,15 @@ compute at all, listed so that nobody reads this document as a description of th
   overhang. "No support on *the* showcase face" needs the face selection the panel carries, and until
   then the scalar is a necessary condition and nothing more.
 - **Tier 2 support** (`TreeSupport::detect_overhangs`), and with it build-plate-only support.
+- **The adhesion constraint `A_footprint ≥ A_min`.** §5 states it as live; it is not. `PlanConstraints`
+  carries `min_footprint_mm2` and no intent ever sets it, so nothing is rejected for adhesion. The
+  reason it is not merely cosmetic: on a cap-on-a-stem part the engine accepts candidates balanced on
+  two 0.3 mm slivers totalling about 7 mm² of bed contact. They lose on score today, but nothing would
+  stop them winning on a part where they scored better. What blocks the fix is that `A_min` is a
+  calibration question — what actually sticks — and guessing it would put a fabricated number in a
+  hard constraint, which is the one place this engine must not have one.
+- **The cusp term is whole-part, not per-face.** §7's weight for the signage intent governs the
+  roughness of the entire visible surface; there is no face selection in `measure_cusp`. The showcase
+  face drives the hard constraints, not the cusp weight.
 
 Everything else in this document is provable in CI.
