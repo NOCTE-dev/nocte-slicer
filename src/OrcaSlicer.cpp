@@ -82,8 +82,8 @@ using namespace nlohmann;
 #include "libslic3r/Nocte/BblCompat.hpp"
 // NOCTE-END
 // NOCTE-BEGIN nocte-plan
-// The --nocte-plan action (ADR-004). The engine lives in libslic3r/Nocte/Plan/ and the JSON writer
-// beside MeshInspect in slic3r/Utils/Nocte/; this file carries the hook and no logic.
+// The --nocte-plan action (ADR-004). The engine lives in libslic3r/Nocte/Plan/ and the JSON writer in
+// slic3r/Utils/Nocte/, modelled on MeshInspect in slic3r/Utils/; this file carries the hook and no logic.
 #include "libslic3r/Nocte/Plan/PlanIntent.hpp"
 #include "libslic3r/Nocte/Plan/OrientEngine.hpp"
 #include "slic3r/Utils/Nocte/PlanToJson.hpp"
@@ -1501,6 +1501,31 @@ int CLI::run(int argc, char **argv)
         }
         if (m_input_files.empty() && m_config.opt_string("load_assemble_list").empty()) {
             boost::nowide::cerr << "--nocte-plan needs an input file or --load-assemble-list" << std::endl;
+            record_exit_reson(outfile_dir, CLI_INVALID_PARAMS, 0, cli_errors[CLI_INVALID_PARAMS], sliced_info);
+            flush_and_exit(CLI_INVALID_PARAMS);
+        }
+        // The --nocte-* values are validated here as well, BEFORE any model is loaded, so a mistyped
+        // intent or a malformed direction fails at once instead of after the input has been read and
+        // repaired. The action handler parses the same m_config again for the intent it plans with,
+        // so the two cannot disagree; a refusal there can only repeat one made here.
+        Slic3r::Nocte::PlanIntent plan_intent;
+        std::string               plan_error;
+        if (! Slic3r::Nocte::parse_plan_options(m_config, plan_intent, plan_error)) {
+            boost::nowide::cerr << plan_error << std::endl;
+            record_exit_reson(outfile_dir, CLI_INVALID_PARAMS, 0, cli_errors[CLI_INVALID_PARAMS], sliced_info);
+            flush_and_exit(CLI_INVALID_PARAMS);
+        }
+        // An intent that is missing the input only the user can supply is refused rather than
+        // planned anyway. Planning anyway does not fail cleanly: with no showcase normal the "that
+        // face points up" constraint cannot be satisfied by any candidate, the set empties, and the
+        // result reads "this part cannot be signed" when the truth is "you did not say which face is
+        // read". A wrong reason is worse than a refusal.
+        if (const char *missing = plan_intent.missing_input()) {
+            boost::nowide::cerr << "--nocte-intent " << Slic3r::Nocte::intent_name(plan_intent.kind)
+                                << " needs a " << missing << "; give it with "
+                                << (plan_intent.kind == Slic3r::Nocte::PartIntent::FunctionalStrength
+                                        ? "--nocte-load-dir x,y,z" : "--nocte-showcase x,y,z")
+                                << std::endl;
             record_exit_reson(outfile_dir, CLI_INVALID_PARAMS, 0, cli_errors[CLI_INVALID_PARAMS], sliced_info);
             flush_and_exit(CLI_INVALID_PARAMS);
         }
@@ -6218,22 +6243,12 @@ int CLI::run(int argc, char **argv)
             // and it exits once the JSON is out.
             Slic3r::Nocte::PlanIntent intent;
             std::string               intent_error;
+            // The options and the intent's completeness were already validated by the --nocte-plan
+            // guard before the model load, which refuses a missing input as well; this parse only
+            // rebuilds the intent. Its failure branch is kept so that the call's result is never
+            // silently ignored, not because it is expected to run.
             if (! Slic3r::Nocte::parse_plan_options(m_config, intent, intent_error)) {
                 boost::nowide::cerr << intent_error << std::endl;
-                record_exit_reson(outfile_dir, CLI_INVALID_PARAMS, 0, cli_errors[CLI_INVALID_PARAMS], sliced_info);
-                flush_and_exit(CLI_INVALID_PARAMS);
-            }
-            // An intent that is missing the input only the user can supply is refused HERE rather
-            // than planned anyway. Planning anyway does not fail cleanly: with no showcase normal
-            // the "that face points up" constraint cannot be satisfied by any candidate, the set
-            // empties, and the result reads "this part cannot be signed" when the truth is "you did
-            // not say which face is read". A wrong reason is worse than a refusal.
-            if (const char *missing = intent.missing_input()) {
-                boost::nowide::cerr << "--nocte-intent " << Slic3r::Nocte::intent_name(intent.kind)
-                                    << " needs a " << missing << "; give it with "
-                                    << (intent.kind == Slic3r::Nocte::PartIntent::FunctionalStrength
-                                            ? "--nocte-load-dir x,y,z" : "--nocte-showcase x,y,z")
-                                    << std::endl;
                 record_exit_reson(outfile_dir, CLI_INVALID_PARAMS, 0, cli_errors[CLI_INVALID_PARAMS], sliced_info);
                 flush_and_exit(CLI_INVALID_PARAMS);
             }

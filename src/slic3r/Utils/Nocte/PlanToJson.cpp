@@ -57,7 +57,15 @@ constexpr double DEC6 = 1000000.;
 // report a strength number the engine never computed.
 constexpr double DIR_MIN_LENGTH = 1e-9;
 
-double rounded(double v, double factor) { return std::round(v * factor) / factor; }
+// Rounded to 1/factor, and never negative zero. A value like -1e-17 rounds to -0.0, which nlohmann
+// prints as "-0.0": a sign on nothing, which makes two plans of the same orientation diff as changed
+// and invites a reader to wonder which way a zero points. -0.0 == 0.0 is true, so the test below
+// catches it and hands back a plain zero.
+double rounded(double v, double factor)
+{
+    const double r = std::round(v * factor) / factor;
+    return r == 0. ? 0. : r;
+}
 
 // RULE 1. The one place a physical quantity becomes JSON.
 //
@@ -83,11 +91,19 @@ json measured_int(int value, bool measured)
     return json(value);
 }
 
-json to_json(const Vec3d &v) { return json::array({ v.x(), v.y(), v.z() }); }
-
 json to_json_rounded(const Vec3d &v, double factor)
 {
     return json::array({ rounded(v.x(), factor), rounded(v.y(), factor), rounded(v.z(), factor) });
+}
+
+// Null for a direction that was not given, so it reads the same way as an unmeasured quantity does
+// everywhere else in this document rather than as a vector that happens to be at the origin. Used
+// for the root intent and for every object alike, so the same absence prints the same way in both.
+json direction_json(const Vec3d &v)
+{
+    if (! (v.norm() > DIR_MIN_LENGTH))
+        return json(nullptr);
+    return to_json_rounded(v, DEC6);
 }
 
 // RULE 2, and the reason Scores.hpp's `support_tier_name()` (Scores.hpp:45) is called rather than
@@ -110,16 +126,34 @@ json to_json_rounded(const Vec3d &v, double factor)
 // that could disagree — the axis-angle is derived from the quaternion, not measured separately.
 //
 // The sign of a quaternion is free (q and -q are the same rotation) and Eigen's choice depends on
-// which matrix element happened to be largest, so it is pinned to w >= 0 here. Without that, two
-// runs that found the same orientation could print different-looking rotations and a diff of two
-// plans would show a change that is not one.
+// which matrix element happened to be largest, so it is pinned here. Without that, two runs that
+// found the same orientation could print different-looking rotations and a diff of two plans would
+// show a change that is not one.
+//
+// The rule is "the first component, in the order w, x, y, z, that does not PRINT as zero is
+// positive" — decided on the rounded value, the one a reader sees. Pinning w >= 0 alone is not
+// enough: every half turn has w = 0 in exact arithmetic and +-1e-17 in practice, so the sign of w
+// would be round-off and the half turn would print as either of its two spellings from run to run.
 json rotation_json(const Transform3d &t)
 {
     const Matrix3d     m = t.linear();
     Eigen::Quaterniond q(m);
     q.normalize();
-    if (q.w() < 0.)
-        q.coeffs() *= -1.;
+    const double order[4] = { q.w(), q.x(), q.y(), q.z() };
+    for (const double c : order) {
+        const double shown = rounded(c, DEC6);
+        if (shown != 0.) {
+            if (shown < 0.)
+                q.coeffs() *= -1.;
+            break;
+        }
+    }
+    // Eigen's AngleAxis flips the axis when w < 0, so a w of -1e-17 left over from the rule above
+    // would print the axis of a half turn against the sign the quaternion was just given. A w that
+    // prints as zero is therefore made non-negative: a change of at most 5e-7 in one component, a
+    // turn of about 1e-6 rad, below both the six decimals of the quaternion and the three of the angle.
+    if (rounded(q.w(), DEC6) == 0.)
+        q.w() = std::abs(q.w());
 
     // Eigen maps the identity quaternion to angle 0 about (1, 0, 0), so "no rotation" always prints
     // the same way rather than as an arbitrary axis.
@@ -177,7 +211,11 @@ json scores_json(const OrientScores &s, bool load_given)
     // Both strength fields are zero when no load direction was given (Scores.hpp), and that zero is
     // an absence, not a finding: a part nobody declared a load for has no failure force, and
     // printing 0 N would read as a part that fails under its own weight.
-    const bool strength_known  = load_given && s.measured;
+    //
+    // They are governed by `section_measured`, the flag Scores.hpp gives them, and not by `measured`:
+    // the section sweep is independent of the first-layer slice, so a candidate can have a good
+    // footprint and a failed sweep — the zero that must never print as 0 N — or the reverse.
+    const bool strength_known  = load_given && s.section_measured;
     out["min_section_mm2"]     = measured_number(s.min_section_area_mm2, strength_known, DEC3);
     out["failure_force_n"]     = measured_number(s.failure_force_n, strength_known, DEC3);
 
@@ -192,12 +230,13 @@ json flags_json(const OrientScores &s)
 {
     // Every flag, unabridged, and not folded into a single "ok". They fail independently — a part
     // can have a perfectly measured cusp and an empty first layer — and a reader who sees a null
-    // above needs to know which of the four is responsible without guessing.
+    // above needs to know which of the five is responsible without guessing.
     json out = json::object();
     out["measured"]         = s.measured;
     out["support_measured"] = s.support_measured;
     out["contact_measured"] = s.contact_measured;
     out["cusp_measured"]    = s.cusp_measured;
+    out["section_measured"] = s.section_measured;
     return out;
 }
 
@@ -258,8 +297,8 @@ json intent_json(const PlanIntent &intent)
 
     json out = json::object();
     out["name"]                 = intent_name(intent.kind);
-    out["load_dir_obj"]         = to_json(intent.load_dir_obj);
-    out["showcase_normal_obj"]  = to_json(intent.showcase_normal_obj);
+    out["load_dir_obj"]         = direction_json(intent.load_dir_obj);
+    out["showcase_normal_obj"]  = direction_json(intent.showcase_normal_obj);
     out["showcase_tol_deg"]     = rounded(intent.showcase_tol_deg, DEC3);
     out["showcase_support_free"] = intent.showcase_support_free;
     // Null when the intent has everything it needs; otherwise the name of the input the user still
@@ -401,15 +440,6 @@ PlanIntent intent_in_instance_frame(const PlanIntent &intent, const Transform3d 
     return out;
 }
 
-// Null for a direction that was not given, so it reads the same way as an unmeasured quantity does
-// everywhere else in this document rather than as a vector that happens to be at the origin.
-json direction_json(const Vec3d &v)
-{
-    if (! (v.norm() > DIR_MIN_LENGTH))
-        return json(nullptr);
-    return to_json_rounded(v, DEC6);
-}
-
 json object_json(const ModelObject &mo, size_t index, const std::string &fallback_source,
                  const PlanIntent &intent, const OrientParams &params)
 {
@@ -472,6 +502,14 @@ json object_json(const ModelObject &mo, size_t index, const std::string &fallbac
     out["blocking_reason"] = result.blocking_reason == RejectReason::None
                                  ? json(nullptr)
                                  : json(reject_reason_name(result.blocking_reason));
+    // How many rejected candidates carry each reason, every reason named even at zero so the key set
+    // is the same in every document. `blocking_reason` is only the largest of these, and when two
+    // constraints conflict — the face can point up only if the part stands on an edge — the largest
+    // is half the story: the tally is what shows the other constraint emptied the rest of the set.
+    json rejections = json::object();
+    for (size_t slot = 1; slot < REJECT_REASON_COUNT; ++ slot)
+        rejections[reject_reason_name(static_cast<RejectReason>(slot))] = result.rejection_counts[slot];
+    out["rejections"] = std::move(rejections);
 
     json best = json::array();
     for (const OrientCandidate &c : result.best)
@@ -491,11 +529,9 @@ json object_json(const ModelObject &mo, size_t index, const std::string &fallbac
 void plan_to_json(const Model &model, const std::vector<std::string> &source_paths,
                   const PlanIntent &intent, const OrientParams &params, std::ostream &out)
 {
-    // Whether a load direction was given at all, decided once and in the same way PlanIntent.cpp
-    // decides it: a length against a floor, never an exact comparison with zero. It governs whether
-    // the two strength fields are numbers or nulls, and it must not be re-derived per candidate.
-    const bool load_given = intent.load_dir_obj.norm() > DIR_MIN_LENGTH;
-
+    // Whether a load direction was given is decided per object, in object_json(), on the direction
+    // AFTER the instance transform — that is the one the engine was handed, and a singular instance
+    // can turn a given direction into none.
     json objects = json::array();
     for (size_t i = 0; i < model.objects.size(); ++ i) {
         const ModelObject *mo = model.objects[i];
@@ -505,7 +541,7 @@ void plan_to_json(const Model &model, const std::vector<std::string> &source_pat
         // `input_file` is usually set. When it is not, a single input file is an unambiguous
         // fallback and anything else is a guess, so the field goes null instead.
         const std::string fallback = source_paths.size() == 1 ? source_paths.front() : std::string();
-        objects.push_back(object_json(*mo, i, fallback, intent, params, load_given));
+        objects.push_back(object_json(*mo, i, fallback, intent, params));
     }
 
     json root = json::object();

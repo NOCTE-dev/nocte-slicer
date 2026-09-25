@@ -9,7 +9,7 @@
 //
 //  * A measurement flag is a FILTER, never a number. combine() reads the raw fields and consults no
 //    flag at all, and says so — the "caller must also drop" paragraph of its contract in Scores.hpp,
-//    at :303-309. A term that could not be measured is left at 0, and 0 is the best value on every
+//    at :316-322. A term that could not be measured is left at 0, and 0 is the best value on every
 //    term combine() inverts, so dropping the unmeasured candidates is this file's job and nothing
 //    else's.
 //  * The cancellation predicate is CONSULTED. Orca's AutoOrienter accepts a `stopcond_` at
@@ -106,14 +106,37 @@ constexpr size_t CANDIDATE_GRAIN_SIZE = 1;
 // than the remainder of the run.
 constexpr size_t CANCEL_BATCH_CANDIDATES = 16;
 
-// One tally slot per enumerator of RejectReason, None included. It is spelled out rather than
-// derived, because C++ offers no count of an enumeration's members and a wrong figure here would be
-// an out-of-bounds write on the tally rather than a miscount. Any enumerator added to
-// OrientEngine.hpp has to be added to this number and to reject_reason_name() together.
-constexpr size_t REJECT_REASON_COUNT = 8;
+// The tally of rejection reasons has one slot per enumerator, REJECT_REASON_COUNT, which lives in
+// OrientEngine.hpp beside the enumeration because OrientResult carries the tally. Every write to it
+// below is bounds-checked against that figure all the same: a value cast in from outside the enum
+// must be a miscount, never an out-of-bounds write.
+
+// Quanta of the ranking keys. std::sort needs a strict weak ordering, and "equal within a
+// tolerance" is not one — it is not transitive — so each key is rounded to a whole number of its
+// quantum and the integers are compared exactly. Each quantum sits well above the round-off the key
+// carries and well below any difference a user would act on:
+//  * SCORE: a weighted sum of five terms in [0, 1] whose weights sum to 1, so it lies in [0, 1]
+//    itself. Round-off in it is ~1e-16; anything past the ninth decimal is not a preference.
+//  * HEIGHT: a candidate laid onto a hull face built from float vertices rests up to ~1e-7 rad off
+//    flat, which changes the height of a 20 mm part by ~2e-6 mm, and a rotation built with a square
+//    root carries ~4e-15 mm on top. A micrometre clears both by a wide margin and is already past
+//    what the model can defend — PlanToJson reports millimetres to three decimals for that reason.
+//  * TURN: the same float normals put ~1e-7 rad into a rotation's angle. 1e-4 rad is 0.006 degrees,
+//    three orders clear of that and three orders below any turn a person would call different.
+// Support is quantised to the caller's support indifference floor instead, in plan_orientation(),
+// because that floor is exactly the statement "a difference smaller than this is not a decision".
+constexpr double SCORE_RANK_QUANTUM     = 1e-9;
+constexpr double HEIGHT_RANK_QUANTUM_MM = 1e-3;
+constexpr double TURN_RANK_QUANTUM_RAD  = 1e-4;
+// Used for the support key when the caller's floor is zero, negative or not a number: the same
+// reporting resolution as the height, in mm^3.
+constexpr double SUPPORT_RANK_QUANTUM_FALLBACK_MM3 = 1e-3;
+// Bound on a quantised key before std::llround, whose result is unspecified past the range of a
+// long long (9.2e18). No key comes near it: a score of 1 is 1e9 quanta and a metre-tall part 1e6.
+constexpr double RANK_KEY_LIMIT = 1e18;
 
 // The axis-aligned turns generated, and therefore the slots reserved for them out of
-// `max_candidates`. It is both the count the header promises (OrientEngine.hpp:105-107) and the
+// `max_candidates`. It is both the count the header promises (OrientEngine.hpp:115-117) and the
 // length of the array axis_aligned_rotations() returns, and the two must not drift apart: a reserve
 // smaller than the array would overrun the budget, a larger one would starve the hull of slots held
 // for turns that are never generated. That is why the reserve is this name and not a literal six.
@@ -127,13 +150,18 @@ bool is_cancelled(const CancelFn &cancel)
     return cancel && cancel();
 }
 
-// A value about to be used as a sort key. std::sort requires a strict weak ordering and every
-// comparison against a NaN is false, so one non-finite key would make the comparator intransitive
-// and the sort undefined. A key we cannot read is mapped to the worst finite value instead of being
-// trusted: an unreadable support volume or height must never sort to the front of the result.
-double rank_key(double v)
+// A value about to be used as a sort key, as a whole number of `quantum`. std::sort requires a
+// strict weak ordering and every comparison against a NaN is false, so one non-finite key would
+// make the comparator intransitive and the sort undefined. A key we cannot read is mapped to the
+// worst value instead of being trusted: an unreadable support volume or height must never sort to
+// the front of the result. The same holds for a key past RANK_KEY_LIMIT, which std::llround could
+// not represent; the negated test is what sends a NaN there as well.
+long long rank_key(double v, double quantum)
 {
-    return std::isfinite(v) ? v : (std::numeric_limits<double>::max)();
+    const double q = v / quantum;
+    if (! (std::abs(q) < RANK_KEY_LIMIT))
+        return (std::numeric_limits<long long>::max)();
+    return std::llround(q);
 }
 
 // The rotation that lays a face whose outward unit normal is `n_unit` onto the build plate, that is,
@@ -144,6 +172,11 @@ double rank_key(double v)
 // pointing at -Z needs no rotation at all, and a normal pointing at +Z needs a half turn about some
 // horizontal axis, for which X is as good as any other because every axis orthogonal to Z gives the
 // same bed direction and the score terms depend on nothing else (see build_candidates()).
+//
+// The half turn is written as the sign matrix diag(1, -1, -1) rather than built from
+// AngleAxisd(PI, X). cos(PI) and sin(PI) in double are -1 and 1.2e-16, and that 1.2e-16 leaks into
+// every coordinate the rotation maps: a 20 mm part comes out 20.000000000000004 mm tall, which is
+// one phantom layer the moment anything rounds the height up. The sign matrix is exact.
 Transform3d rotation_normal_to_bed(const Vec3d &n_unit)
 {
     Transform3d  t        = Transform3d::Identity();
@@ -152,7 +185,10 @@ Transform3d rotation_normal_to_bed(const Vec3d &n_unit)
     if (dot_down >= 1. - PARALLEL_DOT_EPS)
         return t;
     if (dot_down <= -1. + PARALLEL_DOT_EPS) {
-        t.rotate(Eigen::AngleAxisd(PI, Vec3d::UnitX()));
+        Matrix3d half_turn_x = Matrix3d::Identity();
+        half_turn_x(1, 1) = -1.;
+        half_turn_x(2, 2) = -1.;
+        t.linear() = half_turn_x;
         return t;
     }
     t.rotate(Eigen::Quaterniond::FromTwoVectors(n_unit, down));
@@ -205,7 +241,7 @@ struct MergedNormal
 // Merging is not an optimisation, it is the difference between a plan and a waste of the budget: a
 // tessellated cylinder presents hundreds of nearly parallel side facets and scoring each of them
 // separately would spend the whole candidate budget re-measuring one orientation
-// (OrientEngine.hpp:86-88).
+// (OrientEngine.hpp:96-98).
 //
 // The outward direction is taken from the hull's own interior rather than from the facet winding.
 // PartInvariants.cpp:188-190 states plainly that qhull's winding is consistent but not guaranteed,
@@ -326,27 +362,49 @@ std::vector<MergedNormal> merged_hull_normals(const indexed_triangle_set &hull, 
 }
 
 // The six axis-aligned turns a person would try by hand: a quarter turn each way about X and about
-// Y, and a half turn about each of them (OrientEngine.hpp:105-107).
+// Y, and a half turn about each of them (OrientEngine.hpp:115-117).
 //
 // Five of the six lay a different side of a box down — -Y, +Y, +X, -X and +Z — and the two half
 // turns lay the same side down as each other, differing only by a quarter turn about the build Z.
 // The sixth side, -Z, is the current orientation and is already candidate zero. The duplicate is
 // generated rather than pruned here because the header promises six; build_candidates() collapses it
 // against whichever candidate already lays +Z on the bed, which is what the duplicate test is for.
+//
+// Each turn is written out as its exact signed permutation matrix rather than built from an
+// AngleAxisd. cos(PI/2) in double is 6.1e-17, not 0, and a rotation built from it maps a 20 mm cube
+// to a height of 20.000000000000004 mm — a phantom 101st layer wherever the height is rounded up, and
+// a tie against the identity that is then decided by round-off rather than by the tie-break chain.
+// These matrices are exact, so a turn that lays a face flat lays it exactly flat.
 std::array<Transform3d, AXIS_ALIGNED_COUNT> axis_aligned_rotations()
 {
-    const Vec3d x = Vec3d::UnitX();
-    const Vec3d y = Vec3d::UnitY();
-    auto turn = [](double angle_rad, const Vec3d &axis) {
-        Transform3d t = Transform3d::Identity();
-        t.rotate(Eigen::AngleAxisd(angle_rad, axis));
-        return t;
+    // Row-major 3x3 linear parts, every entry -1, 0 or 1. Rx(a) is [1 0 0; 0 c -s; 0 s c] and
+    // Ry(a) is [c 0 s; 0 1 0; -s 0 c], evaluated at a = +90, -90 and 180 degrees.
+    static const double TURNS[][9] = {
+        { 1.,  0.,  0.,   0.,  0., -1.,   0.,  1.,  0. },   // Rx(+90)
+        { 1.,  0.,  0.,   0.,  0.,  1.,   0., -1.,  0. },   // Rx(-90)
+        { 1.,  0.,  0.,   0., -1.,  0.,   0.,  0., -1. },   // Rx(180)
+        { 0.,  0.,  1.,   0.,  1.,  0.,  -1.,  0.,  0. },   // Ry(+90)
+        { 0.,  0., -1.,   0.,  1.,  0.,   1.,  0.,  0. },   // Ry(-90)
+        {-1.,  0.,  0.,   0.,  1.,  0.,   0.,  0., -1. },   // Ry(180)
     };
-    // If AXIS_ALIGNED_COUNT and this list ever disagree the initialiser is too long or too short and
-    // the file does not compile, which is the point of spelling the size as the constant.
-    return std::array<Transform3d, AXIS_ALIGNED_COUNT>{{
-        turn(0.5 * PI, x), turn(-0.5 * PI, x), turn(PI, x),
-        turn(0.5 * PI, y), turn(-0.5 * PI, y), turn(PI, y) }};
+    // A brace list shorter than the array it initialises COMPILES and initialises the rest by
+    // default — for a std::array of Eigen transforms that is an uninitialised matrix scored under
+    // the AxisAligned label. So the table is sized by its own initialiser and its row count is
+    // checked here. A row written with fewer than nine entries would zero-fill in the same way,
+    // which is why every row is spelled out in full.
+    static_assert(sizeof(TURNS) / sizeof(TURNS[0]) == AXIS_ALIGNED_COUNT,
+                  "the axis-aligned turn table and AXIS_ALIGNED_COUNT disagree");
+
+    std::array<Transform3d, AXIS_ALIGNED_COUNT> out;
+    for (size_t k = 0; k < AXIS_ALIGNED_COUNT; ++ k) {
+        Matrix3d m;
+        for (int r = 0; r < 3; ++ r)
+            for (int c = 0; c < 3; ++ c)
+                m(r, c) = TURNS[k][3 * r + c];
+        out[k] = Transform3d::Identity();
+        out[k].linear() = m;
+    }
+    return out;
 }
 
 // One proposed orientation, before it has been scored.
@@ -365,9 +423,9 @@ struct CandidateSeed
 // Two candidates are the same candidate when they lay the same object direction on the bed, and the
 // engine's whole answer really does depend on that direction alone. Writing row_z = R^T * Z, every
 // field of OrientScores reads the rotation through row_z and through nothing else: the cusp sweep
-// dots each facet normal with it (Scores.cpp:353), the support carry and the footprint slice are
+// dots each facet normal with it (Scores.cpp:366), the support carry and the footprint slice are
 // taken on planes normal to it, `height_mm` is the mesh's extent along it, the strength term uses
-// only d.z() = row_z . load (Scores.cpp:789-791), and the tipping margin is a distance in the bed
+// only d.z() = row_z . load (Scores.cpp:805-807), and the tipping margin is a distance in the bed
 // plane, which a rotation about the build Z carries around with the footprint hull. The showcase
 // constraint below reads only the Z component of the rotated normal, so it is row_z as well. A
 // second rotation about the build Z therefore produces a candidate that is identical in every number
@@ -384,6 +442,18 @@ std::vector<CandidateSeed> build_candidates(const PartInvariants &inv, const Ori
     const double merge_deg_clamped = (std::min)(MERGE_DEG_MAX,
                                                 (std::max)(MERGE_DEG_MIN, params.angular_merge_deg));
     const double dedup_cos = std::cos((std::max)(DUPLICATE_MIN_RAD, merge_deg_clamped * DEG_TO_RAD));
+    // The current orientation merges only with an EXACT duplicate of itself, never within the merge
+    // angle. Every other merge keeps a rotation that lays the merged face down, so dropping the
+    // near-duplicate costs a few degrees at most; the current candidate keeps the identity, which
+    // lays nothing down. A hull face 3 degrees off the bed absorbed into it would therefore never be
+    // laid flat by any candidate — the part would be offered only as it sits, resting on an edge.
+    // Take a 100 x 60 x 3 plate imported 3 degrees tilted: its identity is unstable, its large face
+    // is inside the merge angle of the identity, and with the merge angle applied here the whole set
+    // came out degenerate for a part whose right answer is obvious.
+    // The floor is the angle below which rotation_normal_to_bed() already returns the identity
+    // (1 - cos a < PARALLEL_DOT_EPS, i.e. a < sqrt(2 * PARALLEL_DOT_EPS) = 1.41e-6 rad): a face that
+    // close would otherwise enter as a HullFace whose rotation is exactly the identity.
+    const double exact_cos = std::cos((std::max)(DUPLICATE_MIN_RAD, std::sqrt(2. * PARALLEL_DOT_EPS)));
 
     // When two candidates merge, the surviving label is the SMALLEST CandidateSource value: Current
     // beats HullFace, and HullFace beats AxisAligned.
@@ -400,14 +470,20 @@ std::vector<CandidateSeed> build_candidates(const PartInvariants &inv, const Ori
     // the smaller value and the minimum would come out right by itself. That is exactly why the rule
     // has to be written down: it would keep coming out right until somebody reordered the three
     // blocks, and then it would quietly stop, with nothing failing to say so.
-    auto add = [&out, dedup_cos](const Transform3d &rotation, const Vec3d &down_obj,
-                                 CandidateSource source) {
-        for (CandidateSeed &c : out)
-            if (c.down_obj.dot(down_obj) >= dedup_cos) {
+    auto add = [&out, dedup_cos, exact_cos](const Transform3d &rotation, const Vec3d &down_obj,
+                                            CandidateSource source) {
+        for (CandidateSeed &c : out) {
+            // Either side being the current orientation selects the exact test, so the rule holds
+            // whichever of the two was generated first.
+            const bool   with_current = c.source == CandidateSource::Current ||
+                                        source == CandidateSource::Current;
+            const double limit_cos    = with_current ? exact_cos : dedup_cos;
+            if (c.down_obj.dot(down_obj) >= limit_cos) {
                 if (static_cast<uint8_t>(source) < static_cast<uint8_t>(c.source))
                     c.source = source;
                 return;
             }
+        }
         CandidateSeed seed;
         seed.rotation = rotation;
         seed.down_obj = down_obj;
@@ -421,7 +497,7 @@ std::vector<CandidateSeed> build_candidates(const PartInvariants &inv, const Ori
     const size_t budget = (std::max)(size_t(1), params.max_candidates);
 
     // The axis-aligned turns are RESERVED out of the budget rather than left to compete for it
-    // (OrientEngine.hpp:99-102). The hull is truncated; the reserved set is not. Without the reserve,
+    // (OrientEngine.hpp:109-112). The hull is truncated; the reserved set is not. Without the reserve,
     // a scanned or smooth part whose merged hull alone fills every slot would never score the turns
     // a person would try by hand, which is the one outcome that makes a plan look broken.
     //
@@ -496,7 +572,7 @@ bool showcase_clean_required(const PlanIntent &intent, const PlanConstraints &co
 // slice is taken rather than after every candidate has been scored and thrown away.
 //
 // Tier 0 computes no contact area at all and reports `contact_measured == false` however the
-// visibility flags came out, and says so (Scores.cpp:692-697). The showcase-clean constraint reads
+// visibility flags came out, and says so (Scores.cpp:704-710). The showcase-clean constraint reads
 // exactly that field, so on tier 0 it cannot pass for any orientation of any part: step 2 of the
 // filter would reject every candidate as NotMeasured, and the user would be handed a blank plan
 // naming a measurement failure, with nothing anywhere to say that a speed setting caused it. The
@@ -504,7 +580,7 @@ bool showcase_clean_required(const PlanIntent &intent, const PlanConstraints &co
 // can be said without slicing anything, because the answer does not depend on the geometry.
 //
 // Only FacetSweep is caught. FullDetect is not reachable from this entry point and evaluate() falls
-// back to the tier-1 path for it (Scores.cpp:688-690), which does compute contact.
+// back to the tier-1 path for it (Scores.cpp:701-703), which does compute contact.
 bool tier_cannot_answer(const PlanIntent      &intent,
                         const PlanConstraints &constraints,
                         const ScoreParams     &scores)
@@ -513,7 +589,7 @@ bool tier_cannot_answer(const PlanIntent      &intent,
            scores.support_tier == SupportTier::FacetSweep;
 }
 
-// The two filter steps of the contract, in the contract's order (OrientEngine.hpp:163-171):
+// The two filter steps of the contract, in the contract's order (OrientEngine.hpp:181-191):
 // measurement flags first, hard constraints second.
 //
 // The order is not a matter of taste. An unmeasured term is left at zero by Scores.cpp, and a zero
@@ -522,22 +598,27 @@ bool tier_cannot_answer(const PlanIntent      &intent,
 // measure as Unstable, or as NoLoadSection — the name of whichever constraint its zero happened to
 // land on — and the user would go and relax a constraint that was never the problem. NotMeasured is
 // the honest answer and it has to be reached first.
+//
+// `section_required` says whether anything in this run reads the load-bearing section — see where
+// plan_orientation() computes it. It is decided once per run rather than here because it depends on
+// the weights, which this function has no other reason to see.
 RejectReason classify(const OrientScores    &s,
                       const Transform3d     &rotation,
                       const PlanIntent      &intent,
-                      const PlanConstraints &constraints)
+                      const PlanConstraints &constraints,
+                      bool                   section_required)
 {
     // --- step 2: the measurement flags ----------------------------------------------------------
 
     // `measured` is the geometry the candidate rests on: the invariants were usable AND the first
-    // layer produced a footprint hull (Scores.hpp:231-236). Without it the stability and both
+    // layer produced a footprint hull (Scores.hpp:244-249). Without it the stability and both
     // footprint figures are zero rather than measured, and the constraints below would name whichever
     // of the two those zeros happened to fail.
     if (! s.measured)
         return RejectReason::NotMeasured;
 
     // The support volume is required whatever the weights say, because it is not only the support
-    // term: it is added to the extruded volume inside the time estimate (Scores.cpp:777). A failed
+    // term: it is added to the extruded volume inside the time estimate (Scores.cpp:793). A failed
     // support sweep therefore understates this candidate's time as well as its support, and both
     // errors point the same way, towards winning.
     if (! s.support_measured)
@@ -563,6 +644,18 @@ RejectReason classify(const OrientScores    &s,
     if (showcase_clean && ! s.contact_measured)
         return RejectReason::NotMeasured;
 
+    // The load-bearing section, by the same rule as contact: demanded only when something reads it.
+    // With a load direction given, a sweep that came back empty leaves the section and the failure
+    // force at zero (Scores.hpp on `section_measured`). The hard constraint would then name that zero
+    // NoLoadSection — telling the user the part has no load path, which a closed solid always has —
+    // and the strength term would rank on a force nobody measured. A closed solid always has a
+    // positive section, so the zero is the sweep failing, and NotMeasured is the name for that.
+    //
+    // With NO load direction the flag is false as well, and deliberately not caught here: that case
+    // is the user's missing input and falls through to NoLoadSection below, as documented there.
+    if (section_required && ! s.section_measured)
+        return RejectReason::NotMeasured;
+
     // --- step 3: the intent's hard constraints --------------------------------------------------
 
     // Negated comparisons throughout, so that a value we could not read fails rather than passes:
@@ -572,7 +665,7 @@ RejectReason classify(const OrientScores    &s,
         return RejectReason::Unstable;
 
     // The RAW first-layer area, never the hull area: a ring's convex hull would claim the whole disc
-    // and overstate its grip on the plate (Scores.hpp:224-227). A floor of zero means no requirement
+    // and overstate its grip on the plate (Scores.hpp:237-240). A floor of zero means no requirement
     // and is tested first so that a part with no measurable adhesion is not rejected by a constraint
     // the intent did not ask for.
     if (constraints.min_footprint_mm2 > 0. &&
@@ -626,15 +719,11 @@ RejectReason classify(const OrientScores    &s,
 // of how the user exported the file, not of the part. The most common reason is the constraint that
 // emptied the search space, and therefore the one a user has to relax before this part can be
 // planned at all. Ties resolve to the lowest enumerator so that the answer is reproducible.
-RejectReason most_common_reason(const std::vector<OrientCandidate> &candidates)
+//
+// It reads the tally rather than recounting, so the summary and the per-reason counts the result
+// carries (OrientResult::rejection_counts) cannot disagree.
+RejectReason most_common_reason(const std::array<size_t, REJECT_REASON_COUNT> &tally)
 {
-    std::array<size_t, REJECT_REASON_COUNT> tally{};   // value-initialised: every slot starts at 0
-    for (const OrientCandidate &c : candidates) {
-        const size_t slot = static_cast<size_t>(c.rejected);
-        if (slot < REJECT_REASON_COUNT)
-            ++ tally[slot];
-    }
-
     RejectReason reason = RejectReason::None;
     size_t       count  = 0;
     // Slot 0 is None and is skipped: an accepted candidate is not a reason for the set being empty,
@@ -650,14 +739,28 @@ RejectReason most_common_reason(const std::vector<OrientCandidate> &candidates)
     return reason;
 }
 
-// The ranking keys of one surviving candidate, every one of them already finite. See rank_key().
+// How many of `candidates` carry each rejection reason. An accepted candidate counts in no slot, so
+// slot 0 stays at zero, and a value from outside the enumeration is dropped rather than written past
+// the end of the array.
+std::array<size_t, REJECT_REASON_COUNT> tally_reasons(const std::vector<OrientCandidate> &candidates)
+{
+    std::array<size_t, REJECT_REASON_COUNT> tally{};   // value-initialised: every slot starts at 0
+    for (const OrientCandidate &c : candidates) {
+        const size_t slot = static_cast<size_t>(c.rejected);
+        if (slot > 0 && slot < REJECT_REASON_COUNT)
+            ++ tally[slot];
+    }
+    return tally;
+}
+
+// The ranking keys of one surviving candidate, each a whole number of its quantum. See rank_key().
 struct RankKey
 {
-    double score   = 0.;
-    double support = 0.;
-    double height  = 0.;
-    double turn    = 0.;   // radians away from the current orientation
-    size_t index   = 0;    // index into the candidate vector, the final tie-break
+    long long score   = 0;
+    long long support = 0;
+    long long height  = 0;
+    long long turn    = 0;   // quanta of rotation away from the current orientation
+    size_t    index   = 0;   // index into the candidate vector, the final tie-break
 };
 
 } // namespace
@@ -728,6 +831,7 @@ OrientResult plan_orientation(const indexed_triangle_set &its,
         result.rejected.push_back(fallback);
         result.degenerate      = true;
         result.blocking_reason = RejectReason::TierCannotAnswer;
+        result.rejection_counts = tally_reasons(result.rejected);
         result.ok              = true;
         return result;
     }
@@ -740,18 +844,34 @@ OrientResult plan_orientation(const indexed_triangle_set &its,
         return result;
 
     // One sweep for the whole run, never one per candidate. The minimum section normal to the load
-    // direction is measured in the OBJECT frame and no rotation can change it (Scores.hpp:239-245);
+    // direction is measured in the OBJECT frame and no rotation can change it (Scores.hpp:252-258);
     // repeating it per candidate would slice the part up to `section_max_planes` times over again
     // for a number already in hand.
     Vec3d  load_dir_obj    = Vec3d::Zero();
     double min_section_mm2 = 0.;
+    bool   load_given      = false;
     {
         const double load_norm = intent.load_dir_obj.norm();
         if (std::isfinite(load_norm) && load_norm > DIR_MIN_NORM) {
             load_dir_obj    = intent.load_dir_obj;
             min_section_mm2 = min_section_area_along(its, load_dir_obj, params.scores);
+            load_given      = true;
         }
     }
+
+    // The weights are the intent's, and combine() normalises them itself. They are resolved here
+    // rather than at step 4 because the filter needs one fact from them too.
+    const ScoreWeights weights = weights_for(intent.kind);
+
+    // Whether the load-bearing section is READ by this run, and therefore has to have been measured:
+    // a load direction was given, and either the intent's hard constraint tests the section or its
+    // weights rank on the failure force built from it. A load direction is used whenever it is given,
+    // not only by FunctionalStrength — Unspecified and FunctionalVisual weigh strength too (HLSD §7) —
+    // but under Ornament or Draft the strength weight is zero, nothing reads the section, and
+    // rejecting every candidate over a sweep nobody consulted would be the over-reach the contact
+    // rule in classify() already refuses.
+    const bool section_required = load_given &&
+                                  (constraints.require_load_section || weights.strength > 0.);
 
     const size_t              n = seeds.size();
     std::vector<OrientScores> scored(n);
@@ -806,7 +926,7 @@ OrientResult plan_orientation(const indexed_triangle_set &its,
     // the filter to apply a different rule from the one the pre-flight cleared.
     for (size_t i = 0; i < n; ++ i)
         candidates[i].rejected = classify(candidates[i].scores, candidates[i].rotation,
-                                          intent, constraints);
+                                          intent, constraints, section_required);
 
     std::vector<size_t>       survivors;
     std::vector<OrientScores> survivor_scores;
@@ -824,12 +944,10 @@ OrientResult plan_orientation(const indexed_triangle_set &its,
     // would stretch the min-max range of every term around a value that cannot be chosen. That is
     // the same reason the header gives for filtering rather than penalising (PlanIntent.hpp:99-101).
     if (! survivors.empty()) {
-        // The weights are the intent's, and combine() normalises them itself. The indifference
-        // floors come from the caller, because they are a statement about what differences matter to
-        // a user rather than a numerical tolerance: a caller that cares about a 200 mm^3 support
-        // difference has to be able to say so, and the defaults are only a default.
-        const ScoreWeights weights = weights_for(intent.kind);
-
+        // The weights were resolved above. The indifference floors come from the caller, because
+        // they are a statement about what differences matter to a user rather than a numerical
+        // tolerance: a caller that cares about a 200 mm^3 support difference has to be able to say
+        // so, and the defaults are only a default.
         std::vector<std::array<double, 5>> normalized;
         const std::vector<double> combined = combine(survivor_scores, weights, params.epsilons,
                                                      &normalized);
@@ -849,15 +967,34 @@ OrientResult plan_orientation(const indexed_triangle_set &its,
     // Less support, then lower height, then the smaller turn away from the current orientation, then
     // the lower candidate index. The last link makes the order total rather than merely weak, so the
     // result does not depend on which candidate std::sort happened to look at first.
+    //
+    // Every key is compared as a whole number of its quantum, never as a raw double. Compared raw,
+    // the chain is decided by round-off before it reaches the rule it states: a cube laid on a side
+    // by a rotation built from a square root is 20.000000000000004 mm tall, so even once the score
+    // stops charging it a phantom layer it still loses on HEIGHT to the identity by four
+    // femtometres, and "never flip for no gain" would hold only because the round-off happened to
+    // fall that way — and on a part imported tilted, where every face candidate carries float noise,
+    // it would not hold at all. Quantised, the candidates tie on height and the turn decides, which
+    // is the reason the rule gives.
+    //
+    // The support key uses the caller's own indifference floor as its quantum: combine() has just
+    // declared a support spread below that floor irrelevant to the score, and re-deciding the same
+    // difference one link down the chain would undo that. Rounding to a quantum makes a boundary at
+    // half of it — 240 mm^3 and 260 mm^3 against a 500 mm^3 floor land in different buckets — which
+    // is the price of a comparator that is transitive; a tolerance compare would not be.
+    const bool   support_floor_usable = (params.epsilons.support_mm3 > 0.) &&
+                                        std::isfinite(params.epsilons.support_mm3);
+    const double support_quantum      = support_floor_usable ? params.epsilons.support_mm3
+                                                             : SUPPORT_RANK_QUANTUM_FALLBACK_MM3;
     std::vector<RankKey> keys;
     keys.reserve(survivors.size());
     for (size_t k = 0; k < survivors.size(); ++ k) {
         const OrientCandidate &c = candidates[survivors[k]];
         RankKey key;
-        key.score   = rank_key(c.score);
-        key.support = rank_key(c.scores.support_volume_mm3);
-        key.height  = rank_key(c.scores.height_mm);
-        key.turn    = rank_key(rotation_angle_rad(c.rotation));
+        key.score   = rank_key(c.score, SCORE_RANK_QUANTUM);
+        key.support = rank_key(c.scores.support_volume_mm3, support_quantum);
+        key.height  = rank_key(c.scores.height_mm, HEIGHT_RANK_QUANTUM_MM);
+        key.turn    = rank_key(rotation_angle_rad(c.rotation), TURN_RANK_QUANTUM_RAD);
         key.index   = survivors[k];
         keys.push_back(key);
     }
@@ -879,10 +1016,11 @@ OrientResult plan_orientation(const indexed_triangle_set &its,
         if (! candidates[i].accepted())
             result.rejected.push_back(candidates[i]);
     }
+    result.rejection_counts = tally_reasons(result.rejected);
 
     if (survivors.empty()) {
         result.degenerate      = true;
-        result.blocking_reason = most_common_reason(candidates);
+        result.blocking_reason = most_common_reason(result.rejection_counts);
         // The fallback is the current orientation, candidate zero by construction: it is where the
         // part already sits, so it is the one proposal that cannot make anything worse.
         //
@@ -894,7 +1032,7 @@ OrientResult plan_orientation(const indexed_triangle_set &its,
         // `max_results` does not gate it. The fallback is not one of the ranked results that figure
         // bounds — there are none — it is the engine saying where the part sits and, in
         // `blocking_reason`, why nothing beat it. The header's degenerate paragraph asks for it
-        // outright (OrientEngine.hpp:125-135).
+        // outright (OrientEngine.hpp:134-145).
         result.best.push_back(candidates.front());
     }
 

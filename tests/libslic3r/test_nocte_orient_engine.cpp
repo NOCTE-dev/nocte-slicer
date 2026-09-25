@@ -6,9 +6,10 @@
 // regression baseline captured from an implementation.
 //
 // The engine's whole claim is "it picks the sensible orientation and it can say why", so the
-// strongest assertions in this file are the four that name a specific orientation — the signage
+// strongest assertions in this file are the ones that name a specific orientation — the signage
 // plate that must lie flat, the plate that must be REFUSED rather than stood on its edge, the cap on
-// a stem that must be turned over, and the cube that must be left exactly where it is.
+// a stem that must be turned over, the cube that must be left exactly where it is, the tilted cube
+// that must be nudged back rather than flipped, and the tilted plate that must still be laid flat.
 //
 // Frame convention, from OrientEngine.hpp and Scores.hpp: `OrientCandidate::rotation` maps OBJECT
 // coordinates to BUILD coordinates, so a candidate lays object direction d down onto the bed when
@@ -89,6 +90,14 @@ indexed_triangle_set signage_plate()
 Vec3d map_dir(const Transform3d &rotation, const Vec3d &dir_obj)
 {
     return Vec3d(rotation.linear() * dir_obj);
+}
+
+// The size of a candidate's turn away from the orientation the part arrived in, in degrees: the
+// angle of its rotation's angle-axis form, the same quantity the engine's tie-break ranks on.
+double rotation_angle_deg(const Transform3d &rotation)
+{
+    const Matrix3d linear = rotation.linear();
+    return Eigen::AngleAxisd(linear).angle() * 180. / PI;
 }
 
 // The identity, stated on the three basis vectors rather than on the matrix, so a failure names the
@@ -296,6 +305,25 @@ TEST_CASE("nocte plan: a plate is not stood on its edge to show a face", "[Nocte
     REQUIRE((result.blocking_reason == RejectReason::Unstable ||
              result.blocking_reason == RejectReason::ShowcaseNotUp));
 
+    // The per-reason tally, which is what tells a CONFLICT from a single failing constraint. The
+    // six candidates (the -Z face merges into the identity, every axis-aligned turn onto a face):
+    //   identity, +Z up        stability 30 / 1.5 = 20, passes; +X horizontal -> ShowcaseNotUp
+    //   flipped, -Z up         stability 20, passes; +X still horizontal      -> ShowcaseNotUp
+    //   +X up and -X up        60 x 3 footprint, 1.5 / 50 = 0.03              -> Unstable
+    //   +Y up and -Y up        100 x 3 footprint, 1.5 / 30 = 0.05             -> Unstable
+    // (stability is tested before the showcase, so the +X-up candidate — the one that does show the
+    // face — is counted as Unstable.) Four and two: `blocking_reason` alone says "Unstable", and only
+    // the tally shows that the two stable candidates were lost to the other constraint.
+    REQUIRE(result.considered == static_cast<size_t>(6));
+    REQUIRE(result.blocking_reason == RejectReason::Unstable);
+    REQUIRE(result.rejection_counts[static_cast<size_t>(RejectReason::Unstable)] == static_cast<size_t>(4));
+    REQUIRE(result.rejection_counts[static_cast<size_t>(RejectReason::ShowcaseNotUp)] == static_cast<size_t>(2));
+    REQUIRE(result.rejection_counts[static_cast<size_t>(RejectReason::None)] == static_cast<size_t>(0));
+    size_t tallied = 0;
+    for (size_t slot = 0; slot < REJECT_REASON_COUNT; ++slot)
+        tallied += result.rejection_counts[slot];
+    REQUIRE(tallied == result.rejected.size());
+
     // The documented fallback: `best` holds only the current orientation.
     REQUIRE(result.best.size() == static_cast<size_t>(1));
     REQUIRE(result.best[0].source == CandidateSource::Current);
@@ -379,18 +407,27 @@ TEST_CASE("nocte plan: a top-heavy part is turned over", "[NoctePlan]")
 TEST_CASE("nocte plan: a cube is left exactly where it is", "[NoctePlan]")
 {
     // A 20 mm cube is the same part whichever face it stands on: support 0, cusp 0, height 20,
-    // stability 10 / 10 = 1, and the same layer count, on every one of the seven candidates
-    // (the current orientation plus the six hull faces). Every term ties, so the whole decision
-    // falls to the tie-break chain, and its last documented rule is the one under test:
+    // stability 10 / 10 = 1, and 20 / 0.2 = 100 layers, on every one of the six candidates — the
+    // current orientation, which is also the -Z hull face (that face's normal is exactly (0,0,-1)
+    // and merges into it), plus the five other hull faces; the six axis-aligned turns each land
+    // exactly on one of those faces and merge. Every term ties, so the whole decision falls to the
+    // tie-break chain, and its last documented rule is the one under test:
     // "A part is never flipped for no gain."
     //
     // Nothing else in this file can catch an engine that returns an arbitrary member of a tied set.
+    // And the tie has to be a tie by construction, not by luck: the side faces are laid down by
+    // rotations built with a square root, which leave the cube 20.000000000000004 mm tall. Before
+    // the layer count took a slack that was 101 layers, 2 s more, and a worse score for every
+    // rotated candidate — the identity then won on SCORE, by round-off, and this test passed for
+    // the wrong reason. The per-candidate checks below pin 100 layers and a score of exactly 0.
     const indexed_triangle_set cube = its_make_cube(20., 20., 20.);
     const PartInvariants       inv  = precompute_mesh(cube);
     REQUIRE(inv.valid);
 
-    const PlanIntent   intent = make_intent(PartIntent::Unspecified);
-    const OrientParams params;
+    const PlanIntent intent = make_intent(PartIntent::Unspecified);
+    OrientParams     params;
+    // Room for all six in `best`, so every one of them can be checked.
+    params.max_results = 8;
     const OrientResult result = plan_orientation(cube, inv, intent, params, never_cancel);
 
     REQUIRE(result.ok);
@@ -410,10 +447,157 @@ TEST_CASE("nocte plan: a cube is left exactly where it is", "[NoctePlan]")
     REQUIRE_THAT(winner.scores.height_mm, WithinRel(20., 1e-6));
     REQUIRE_THAT(winner.scores.support_volume_mm3, WithinAbs(0., 1e-6));
     REQUIRE_THAT(winner.scores.cusp_mean_mm, WithinAbs(0., 1e-9));
-    // Six faces to rest on plus the identity: more than one candidate was in the running, and every
-    // one of them passed the filter.
-    REQUIRE(result.considered > static_cast<size_t>(1));
+    // Six faces to rest on, one of them the identity: six candidates in the running, and every one
+    // of them passed the filter.
+    REQUIRE(result.considered == static_cast<size_t>(6));
     REQUIRE(result.rejected.empty());
+    REQUIRE(result.best.size() == static_cast<size_t>(6));
+
+    // The tie, candidate by candidate. Every term's spread is below its indifference floor (it is
+    // zero, or round-off), so every normalised term is 0 and so is every score; and every candidate
+    // is 100 layers, not 101.
+    for (const OrientCandidate &c : result.best) {
+        REQUIRE(c.accepted());
+        REQUIRE(c.scores.layer_count == 100);
+        REQUIRE_THAT(c.score, WithinAbs(0., 1e-12));
+        REQUIRE_THAT(c.scores.height_mm, WithinAbs(20., 1e-9));
+    }
+}
+
+TEST_CASE("nocte plan: a tilted cube is nudged flat, not flipped", "[NoctePlan]")
+{
+    // The same 20 mm cube, imported turned 30 degrees about X. Its six faces now have outward
+    // normals Rx(30) * (+-X, +-Y, +-Z):
+    //   bottom  Rx(30)(0,0,-1) = (0,  0.5, -0.866)   30 degrees from -Z
+    //   front   Rx(30)(0,-1,0) = (0, -0.866, -0.5)   60 degrees from -Z
+    //   +-X     (+-1, 0, 0)                           90 degrees from -Z (twice)
+    //   back    Rx(30)(0,1,0)  = (0,  0.866,  0.5)  120 degrees from -Z
+    //   top     Rx(30)(0,0,1)  = (0, -0.5,  0.866)  150 degrees from -Z
+    // and laying face n on the bed is the from-to rotation n -> -Z, whose angle is exactly the angle
+    // between them. The candidates: the identity, which leaves the cube on an edge (its first layer
+    // is a 20 x 0.23 mm strip at y' in [-0.06, 0.17], its centre of mass is at
+    // y' = 10 cos 30 - 10 sin 30 = 3.66 mm, outside it, so stability 0 -> Unstable); the six face
+    // candidates above; and the axis-aligned turns Rx(90), Rx(-90), Rx(180), which lay object -Y,
+    // +Y and +Z down — each 30 degrees from a face, so they do not merge, and each leaves the cube
+    // on an edge again (Rx(120), Rx(-60), Rx(210) of the original) -> Unstable. Ry(+-90) land
+    // exactly on the +-X faces and Ry(180) exactly on Rx(180), and merge. 1 + 6 + 3 = 10 considered,
+    // 6 accepted, 4 rejected.
+    //
+    // The six accepted are the cube on each of its faces and tie on everything the score measures:
+    // support 0 (only the bed face faces down, and the bed face is never carried), cusp ~2e-8 mm
+    // from walls a float-normal 1e-7 rad off vertical — far below the 0.02 mm floor — stability 1,
+    // 100 layers, identical extruded volume. Every term's spread is below its floor, so every score
+    // is 0; support ties at 0; heights are 20 mm give or take ~2e-6, the same micrometre. So the
+    // decision falls to the turn: 30 degrees wins over 60, 90, 120 and 150. The nudge, not the flip.
+    //
+    // Before the indifference floor zeroed a sub-floor spread, the 2e-8 mm cusp noise came out as
+    // (2e-8 / 0.02) * 0.25 = 2.5e-7 of score — far above any honest tie — and the winner was
+    // whichever face happened to carry the least float noise.
+    const double tilt_deg = 30.;
+    indexed_triangle_set cube = its_make_cube(20., 20., 20.);
+    Transform3d          tilt = Transform3d::Identity();
+    tilt.rotate(Eigen::AngleAxisd(tilt_deg * PI / 180., Vec3d::UnitX()));
+    its_transform(cube, tilt);
+    const PartInvariants inv = precompute_mesh(cube);
+    REQUIRE(inv.valid);
+    REQUIRE_THAT(inv.volume, WithinRel(8000., 1e-4));
+
+    const PlanIntent intent = make_intent(PartIntent::Unspecified);
+    OrientParams     params;
+    params.max_results = 8;
+    const OrientResult result = plan_orientation(cube, inv, intent, params, never_cancel);
+
+    REQUIRE(result.ok);
+    REQUIRE_FALSE(result.degenerate);
+    REQUIRE(result.considered == static_cast<size_t>(10));
+    REQUIRE(result.best.size() == static_cast<size_t>(6));
+    REQUIRE(result.rejected.size() == static_cast<size_t>(4));
+    for (const OrientCandidate &c : result.rejected)
+        REQUIRE(c.rejected == RejectReason::Unstable);
+    // The tally carries the same four, under the reason that took them.
+    REQUIRE(result.rejection_counts[static_cast<size_t>(RejectReason::Unstable)] == static_cast<size_t>(4));
+
+    // THE ASSERTION: the 30 degree nudge, laying the cube's own bottom face back on the bed.
+    const OrientCandidate &winner = result.best[0];
+    REQUIRE(winner.accepted());
+    REQUIRE(winner.source == CandidateSource::HullFace);
+    REQUIRE_THAT(rotation_angle_deg(winner.rotation), WithinAbs(tilt_deg, 0.01));
+    const Vec3d bottom_obj = Vec3d(tilt.linear() * Vec3d(0., 0., -1.));
+    REQUIRE(map_dir(winner.rotation, bottom_obj).z() < -0.99999);
+
+    // And the turns rise from there in the tie-break's order: 30, 60, 90, 90, 120, 150.
+    const double expected_deg[6] = { 30., 60., 90., 90., 120., 150. };
+    for (size_t i = 0; i < result.best.size(); ++i) {
+        REQUIRE_THAT(result.best[i].score, WithinAbs(0., 1e-12));
+        REQUIRE(result.best[i].scores.layer_count == 100);
+        REQUIRE_THAT(rotation_angle_deg(result.best[i].rotation), WithinAbs(expected_deg[i], 0.01));
+    }
+}
+
+TEST_CASE("nocte plan: a plate imported slightly tilted is still laid flat", "[NoctePlan]")
+{
+    // The signage plate, 100 x 60 x 3, imported turned 3 degrees about X, FunctionalVisual with the
+    // showcase normal set to the plate's own top face, Rx(3)(0,0,1) = (0, -0.0523, 0.9986).
+    //
+    // The current orientation leaves the plate resting on its long lower edge. Its first layer, the
+    // slice at 0.1 mm, is the strip y sin 3 + z cos 3 <= 0.1: y' from -0.005 to 0.1 / sin 3 = 1.91
+    // mm. The centre of mass is at y' = 30 cos 3 - 1.5 sin 3 = 29.88 mm, far outside that strip,
+    // so stability is 0 and the identity is Unstable — even though its showcase face is only 3
+    // degrees from up, inside the 5 degree tolerance.
+    //
+    // The orientation that works is the plate's large bottom face laid on the bed: a 3 degree turn.
+    // Its normal Rx(3)(0,0,-1) is 3 degrees from -Z, INSIDE the 5 degree merge angle of the current
+    // candidate — and when the current candidate absorbed hull faces at the merge angle, this face
+    // merged into the identity, whose rotation lays nothing down. No candidate laid the plate flat,
+    // every one was rejected, and the plan came back degenerate for a part whose answer is obvious.
+    // The current candidate now merges only with an exact duplicate (1e-6 rad), so the face is a
+    // candidate of its own.
+    //
+    // Laid on it: footprint 100 x 60 = 6000 mm^2, d_min 30, z_com 1.5, stability 20; the top face
+    // straight up (to the float precision of the hull normal, ~1e-7 rad); no support. It is the only
+    // candidate with the showcase face up and a stable footing, so it is the winner.
+    const double tilt_deg = 3.;
+    indexed_triangle_set plate = signage_plate();
+    Transform3d          tilt  = Transform3d::Identity();
+    tilt.rotate(Eigen::AngleAxisd(tilt_deg * PI / 180., Vec3d::UnitX()));
+    its_transform(plate, tilt);
+    const PartInvariants inv = precompute_mesh(plate);
+    REQUIRE(inv.valid);
+    REQUIRE_THAT(inv.volume, WithinRel(18000., 1e-4));
+
+    PlanIntent intent = make_intent(PartIntent::FunctionalVisual);
+    intent.showcase_normal_obj = Vec3d(tilt.linear() * Vec3d::UnitZ());
+    REQUIRE(intent.missing_input() == nullptr);
+
+    const OrientParams params;
+    REQUIRE_THAT(params.angular_merge_deg, WithinAbs(5., 1e-12));
+    const OrientResult result = plan_orientation(plate, inv, intent, params, never_cancel);
+
+    REQUIRE(result.ok);
+    REQUIRE_FALSE(result.degenerate);
+    REQUIRE_FALSE(result.best.empty());
+
+    const OrientCandidate &winner = result.best[0];
+    REQUIRE(winner.accepted());
+    REQUIRE(winner.source == CandidateSource::HullFace);
+    // THE ASSERTION: the read face is up to within 0.1 degree, cos(0.1 deg) = 0.9999985 — far
+    // tighter than the 5 degree tolerance, so the identity's 3 degrees could not pass it even if it
+    // were stable.
+    REQUIRE(map_dir(winner.rotation, intent.showcase_normal_obj).z() >= std::cos(0.1 * PI / 180.));
+    // A 3 degree turn, not a flip: it is the nudge that undoes the import tilt.
+    REQUIRE_THAT(rotation_angle_deg(winner.rotation), WithinAbs(tilt_deg, 0.01));
+    REQUIRE_THAT(winner.scores.footprint_area_mm2, WithinRel(6000., 1e-3));
+    REQUIRE_THAT(winner.scores.stability, WithinRel(20., 0.02));
+    REQUIRE_THAT(winner.scores.height_mm, WithinRel(3., 1e-4));
+
+    // The identity is still there, rejected for the reason traced above.
+    const OrientCandidate *current = nullptr;
+    for (const OrientCandidate &c : result.rejected)
+        if (c.source == CandidateSource::Current)
+            current = &c;
+    REQUIRE(current != nullptr);
+    REQUIRE(is_identity_rotation(current->rotation));
+    REQUIRE(current->rejected == RejectReason::Unstable);
 }
 
 // --- cancellation ------------------------------------------------------------------------------
@@ -447,23 +631,53 @@ TEST_CASE("nocte plan: the cancellation predicate is actually read", "[NoctePlan
         REQUIRE(calls > 0);
     }
 
-    SECTION("cancelled part way through") {
+    // Where the predicate is read, traced through plan_orientation(): once before any work, once at
+    // the top of every batch of CANCEL_BATCH_CANDIDATES = 16 candidates, and once after scoring and
+    // before ranking. cap_on_a_stem(10, 4) has 10 candidates — its convex hull has 10 planes (the
+    // cap top, the four vertical cap sides, the four trapezoids running from the cap's lower edges
+    // down to the stem base, and the 4 x 4 stem base), the stem base IS the current orientation's
+    // -Z and merges into it, leaving 1 + 9 = 10, and all six axis-aligned turns land exactly on a cap
+    // side or the cap top and merge. 10 <= 16 is one batch, so an uninterrupted run reads the
+    // predicate exactly 1 + 1 + 1 = 3 times; the control below pins that count, so the two sections
+    // above it are known to stop at the second and at the third read rather than somewhere unknown.
+
+    SECTION("cancelled at the batch boundary, after the run has started") {
+        // Call 1 (before any work) says continue; call 2 (the top of the first and only batch) says
+        // stop. The candidates have been built by then and none scored.
         int  calls = 0;
-        auto cancel_later = [&calls]() {
+        auto cancel_at_batch = [&calls]() {
             ++calls;
-            return calls > 3;
+            return calls > 1;
         };
-        const OrientResult result = plan_orientation(part, inv, intent, params, cancel_later);
+        const OrientResult result = plan_orientation(part, inv, intent, params, cancel_at_batch);
 
         REQUIRE_FALSE(result.ok);
         REQUIRE(result.cancelled);
-        // It kept asking. Three "keep going" answers were honoured and the fourth was obeyed, so the
-        // predicate is consulted repeatedly rather than once at the top.
-        REQUIRE(calls > 3);
+        // Exactly two reads: the "continue" was honoured and the "stop" obeyed at once. A predicate
+        // read only at the top would have stopped at 1; one never read inside would reach 3.
+        REQUIRE(calls == 2);
+        REQUIRE(result.considered == static_cast<size_t>(0));
+    }
+
+    SECTION("cancelled after scoring, before ranking") {
+        // Calls 1 and 2 say continue, so the one batch is scored; call 3, the last read before the
+        // ranking, says stop. Every slicing pass has been paid for and the result is still withheld,
+        // because a cancelled run must not come back looking like a finished one.
+        int  calls = 0;
+        auto cancel_before_ranking = [&calls]() {
+            ++calls;
+            return calls > 2;
+        };
+        const OrientResult result = plan_orientation(part, inv, intent, params, cancel_before_ranking);
+
+        REQUIRE_FALSE(result.ok);
+        REQUIRE(result.cancelled);
+        REQUIRE(calls == 3);
+        REQUIRE(result.best.empty());
     }
 
     SECTION("the control: the same call completes when nothing cancels it") {
-        // The section that gives the two above their meaning. Identical mesh, identical intent,
+        // The section that gives the ones above their meaning. Identical mesh, identical intent,
         // identical params; only the predicate changes, and now the engine must succeed.
         int  calls = 0;
         auto never = [&calls]() {
@@ -475,8 +689,10 @@ TEST_CASE("nocte plan: the cancellation predicate is actually read", "[NoctePlan
         REQUIRE(result.ok);
         REQUIRE_FALSE(result.cancelled);
         REQUIRE_FALSE(result.best.empty());
-        REQUIRE(result.considered > static_cast<size_t>(0));
-        REQUIRE(calls > 0);
+        // The traced candidate count, and with it the one batch the call count rests on.
+        REQUIRE(result.considered == static_cast<size_t>(10));
+        // 1 before the run + 1 for the single batch + 1 before ranking.
+        REQUIRE(calls == 3);
     }
 }
 
@@ -554,7 +770,7 @@ TEST_CASE("nocte plan: max_candidates and max_results are both honoured", "[Noct
     }
 
     SECTION("the result list is capped independently of the candidate budget") {
-        // A 20 mm cube: all seven candidates pass the filter (stability 1 on every face), so the
+        // A 20 mm cube: all six candidates pass the filter (stability 1 on every face), so the
         // accepted set is larger than any cap asked for below and `best.size()` is decided by
         // max_results alone.
         const indexed_triangle_set cube = its_make_cube(20., 20., 20.);
@@ -718,7 +934,7 @@ TEST_CASE("nocte plan: a loaded part is laid so the load runs along the layers",
         REQUIRE(missing != nullptr);
         // It names the load direction rather than shrugging: a default here would answer a question
         // the user was asked precisely because we cannot answer it. The string is fixed by
-        // PlanIntent.hpp:60-62 because the CLI refuses to plan on it and names the option to supply.
+        // PlanIntent.hpp:67-69 because the CLI refuses to plan on it and names the option to supply.
         REQUIRE(std::string(missing) == "load direction");
     }
 
@@ -768,11 +984,88 @@ TEST_CASE("nocte plan: a loaded part is laid so the load runs along the layers",
     }
 }
 
+TEST_CASE("nocte plan: a failed section sweep is unmeasured, not a missing load path", "[NoctePlan]")
+{
+    // The same 20 x 20 x 40 box, loaded along object +Z, with the section sweep made to fail
+    // deterministically: section_step_mm = 1000. In min_section_area_along() the extent along +Z is
+    // 40 mm; the step is max(1e-3, 1000) = 1000; 40 / 1000 = 0.04 planes is under the 400 cap, so
+    // the step stands; and sample_planes() puts its first plane at z_min + 0.5 * 1000 = z_min + 500,
+    // which is not below z_min + 40, so the plane list is empty and the sweep returns 0. Nothing
+    // else reads section_step_mm, so every other number is the ordinary box's: six candidates (the
+    // identity, which is also the -Z face, plus five more hull faces; the axis-aligned turns merge),
+    // all measured, all at stability 0.5 or 1, above the 0.35 floor.
+    //
+    // A closed solid always has a positive section, so the zero is the sweep failing, and
+    // `section_measured` is false. Without it being read, FunctionalStrength would reject all six
+    // as NoLoadSection — telling the user the box has no load path at all — when the truth is that
+    // we could not measure it.
+    const indexed_triangle_set box = its_make_cube(20., 20., 40.);
+    const PartInvariants       inv = precompute_mesh(box);
+    REQUIRE(inv.valid);
+
+    OrientParams broken;
+    broken.scores.section_step_mm = 1000.;
+    REQUIRE_THAT(min_section_area_along(box, Vec3d::UnitZ(), broken.scores), WithinAbs(0., 1e-12));
+
+    SECTION("FunctionalStrength names the measurement, not the constraint") {
+        PlanIntent intent = make_intent(PartIntent::FunctionalStrength);
+        intent.load_dir_obj = Vec3d::UnitZ();
+        const OrientResult result = plan_orientation(box, inv, intent, broken, never_cancel);
+
+        REQUIRE(result.ok);
+        REQUIRE(result.considered == static_cast<size_t>(6));
+        REQUIRE(result.degenerate);
+        REQUIRE(result.blocking_reason == RejectReason::NotMeasured);
+        REQUIRE(result.rejected.size() == static_cast<size_t>(6));
+        for (const OrientCandidate &c : result.rejected) {
+            REQUIRE(c.rejected == RejectReason::NotMeasured);
+            // Everything else about the candidate was measured; the section alone was not.
+            REQUIRE(c.scores.measured);
+            REQUIRE(c.scores.support_measured);
+            REQUIRE(c.scores.cusp_measured);
+            REQUIRE_FALSE(c.scores.section_measured);
+        }
+        REQUIRE(result.rejection_counts[static_cast<size_t>(RejectReason::NotMeasured)] == static_cast<size_t>(6));
+        REQUIRE(result.rejection_counts[static_cast<size_t>(RejectReason::NoLoadSection)] == static_cast<size_t>(0));
+    }
+
+    SECTION("an intent that does not weigh strength does not need the section") {
+        // Ornament's strength weight is 0 and it has no section constraint, so nothing reads the
+        // section and a failed sweep is no reason to refuse the part — the same rule the contact
+        // flag follows. The load direction is still carried, and the flag still says it failed.
+        PlanIntent intent = make_intent(PartIntent::Ornament);
+        intent.load_dir_obj = Vec3d::UnitZ();
+        REQUIRE_THAT(weights_for(PartIntent::Ornament).strength, WithinAbs(0., 1e-12));
+        const OrientResult result = plan_orientation(box, inv, intent, broken, never_cancel);
+
+        REQUIRE(result.ok);
+        REQUIRE_FALSE(result.degenerate);
+        REQUIRE(result.rejected.empty());
+        REQUIRE_FALSE(result.best.empty());
+        REQUIRE_FALSE(result.best[0].scores.section_measured);
+    }
+
+    SECTION("the control: the ordinary sweep measures the section") {
+        // Default step, same box, same intent: 400 mm^2 found, the flag set, the plan accepted —
+        // so the two sections above differ from a working run in the sweep and nothing else.
+        PlanIntent intent = make_intent(PartIntent::FunctionalStrength);
+        intent.load_dir_obj = Vec3d::UnitZ();
+        const OrientParams params;
+        const OrientResult result = plan_orientation(box, inv, intent, params, never_cancel);
+
+        REQUIRE(result.ok);
+        REQUIRE_FALSE(result.degenerate);
+        REQUIRE_FALSE(result.best.empty());
+        REQUIRE(result.best[0].scores.section_measured);
+        REQUIRE_THAT(result.best[0].scores.min_section_area_mm2, WithinRel(400., 5e-3));
+    }
+}
+
 // --- PlanIntent ----------------------------------------------------------------------------------
 
 TEST_CASE("nocte plan: the intent weight table is exactly what the header publishes", "[NoctePlan]")
 {
-    // The table lives in the CONTRACT (PlanIntent.hpp:73-78), not only in the .cpp, so this test can
+    // The table lives in the CONTRACT (PlanIntent.hpp:80-97), not only in the .cpp, so this test can
     // pin all 25 numbers without reading the implementation it is testing:
     //
     //   Intent              support  cusp  time  strength  stability
@@ -804,7 +1097,7 @@ TEST_CASE("nocte plan: the intent weight table is exactly what the header publis
 
     SECTION("Unspecified") {
         // 0.25 + 0.25 + 0.20 + 0.15 + 0.15 = 1.00, and these are exactly the ScoreWeights defaults
-        // (Scores.hpp:265-270) — which is what "balanced; no question asked of the user" has to
+        // (Scores.hpp:286-290) — which is what "balanced; no question asked of the user" has to
         // mean: the intent that asks nothing must not quietly prefer anything.
         const ScoreWeights w = weights_for(PartIntent::Unspecified);
         REQUIRE_THAT(w.support,   WithinAbs(0.25, 1e-12));
@@ -817,7 +1110,7 @@ TEST_CASE("nocte plan: the intent weight table is exactly what the header publis
     SECTION("Ornament") {
         // 0.30 + 0.45 + 0.15 + 0.00 + 0.10 = 1.00. "Looked at, never loaded": cusp carries 0.45,
         // nearly half the preference, and the strength zero is deliberate — a zero weight drops the
-        // term entirely (Scores.hpp:266-268), which is how "never loaded" is said in numbers.
+        // term entirely (Scores.hpp:282-283), which is how "never loaded" is said in numbers.
         const ScoreWeights w = weights_for(PartIntent::Ornament);
         REQUIRE_THAT(w.support,   WithinAbs(0.30, 1e-12));
         REQUIRE_THAT(w.cusp,      WithinAbs(0.45, 1e-12));
@@ -918,7 +1211,7 @@ TEST_CASE("nocte plan: an intent reports the input it is missing", "[NoctePlan]"
     }
 
     SECTION("FunctionalStrength wants a load direction") {
-        // PlanIntent.hpp:60-62 fixes the two strings exactly, so they are pinned exactly: the CLI
+        // PlanIntent.hpp:67-69 fixes the two strings exactly, so they are pinned exactly: the CLI
         // prints them and names the option to supply, which makes a reworded string a user-visible
         // change rather than an internal one.
         PlanIntent intent = make_intent(PartIntent::FunctionalStrength);
@@ -952,7 +1245,7 @@ TEST_CASE("nocte plan: an intent reports the input it is missing", "[NoctePlan]"
 TEST_CASE("nocte plan: an intent name round-trips and an unknown one is refused", "[NoctePlan]")
 {
     // The spelling is persisted in nocte_report.json and parsed back from the CLI, so the pair has
-    // to be an exact inverse — and PlanIntent.hpp:31-33 fixes the five spellings themselves, which
+    // to be an exact inverse — and PlanIntent.hpp:38-40 fixes the five spellings themselves, which
     // makes them pinnable rather than merely required to be distinct.
     SECTION("the five spellings are the ones the header names") {
         // Pinned as LITERALS, not only through the round-trip below. A round-trip is satisfied by
@@ -998,7 +1291,7 @@ TEST_CASE("nocte plan: an intent name round-trips and an unknown one is refused"
     // so distinctness follows from them and a loop asserting it could no longer fail.
 
     SECTION("parsing ignores case") {
-        // Contract, not convenience: PlanIntent.hpp:31-33 says the five spellings are matched
+        // Contract, not convenience: PlanIntent.hpp:38-40 says the five spellings are matched
         // CASE-INSENSITIVELY because they are typed on a command line. "Draft" and "draft" are the
         // same answer.
         for (const PartIntent kind : all_intents) {
@@ -1010,7 +1303,7 @@ TEST_CASE("nocte plan: an intent name round-trips and an unknown one is refused"
     }
 
     SECTION("an unknown name is refused and the output is untouched") {
-        // PlanIntent.hpp:35-37: false, and `out` LEFT UNTOUCHED, rather than a fallback to
+        // PlanIntent.hpp:42-44: false, and `out` LEFT UNTOUCHED, rather than a fallback to
         // Unspecified. Seeded with FunctionalVisual precisely because it is not the enum's zero
         // value: a parse_intent that wrote Unspecified on failure — the "helpful" default the header
         // forbids, which would re-weight every candidate without saying so — fails these lines, and
@@ -1034,7 +1327,11 @@ TEST_CASE("nocte plan: every reason and every source has a name", "[NoctePlan]")
     // "The reason is the product": a panel or a CLI that renders a rejection has to have something
     // to print for every value the enum can take, including the ones no fixture in this file
     // produces.
-    const RejectReason reasons[7] = {
+    //
+    // Every enumerator, TierCannotAnswer included, and the list is checked against
+    // REJECT_REASON_COUNT — the figure the result's tally is sized by — so an enumerator added to
+    // the header without a name, or without growing the tally, fails here.
+    const RejectReason reasons[] = {
         RejectReason::None,
         RejectReason::NotMeasured,
         RejectReason::Unstable,
@@ -1042,15 +1339,22 @@ TEST_CASE("nocte plan: every reason and every source has a name", "[NoctePlan]")
         RejectReason::NoLoadSection,
         RejectReason::ShowcaseNotUp,
         RejectReason::ShowcaseSupported,
+        RejectReason::TierCannotAnswer,
     };
-    for (size_t i = 0; i < static_cast<size_t>(7); ++i) {
+    const size_t n_reasons = sizeof(reasons) / sizeof(reasons[0]);
+    REQUIRE(n_reasons == REJECT_REASON_COUNT);
+    for (size_t i = 0; i < n_reasons; ++i) {
+        // Listed in enumerator order, so the tally slot of each reason is its position here.
+        REQUIRE(static_cast<size_t>(reasons[i]) == i);
         const char *name = reject_reason_name(reasons[i]);
         REQUIRE(name != nullptr);
         REQUIRE(std::strlen(name) > static_cast<size_t>(0));
+        // "Unknown" is the fallback for a value outside the enum; a real enumerator must not reach it.
+        REQUIRE(std::string(name) != "Unknown");
     }
     // Distinct, or the panel cannot tell an unstable candidate from an unmeasured one.
-    for (size_t i = 0; i < static_cast<size_t>(7); ++i)
-        for (size_t j = i + 1; j < static_cast<size_t>(7); ++j)
+    for (size_t i = 0; i < n_reasons; ++i)
+        for (size_t j = i + 1; j < n_reasons; ++j)
             REQUIRE(std::string(reject_reason_name(reasons[i])) !=
                     std::string(reject_reason_name(reasons[j])));
 
@@ -1106,7 +1410,7 @@ TEST_CASE("nocte plan: an accepted candidate carries the numbers that explain it
     // Best first, and said as a strict ordering over the list rather than as a property of one
     // entry: a sort that ran backwards fails here and nowhere else in this file.
     for (size_t i = 1; i < result.best.size(); ++i)
-        REQUIRE(result.best[i].score >= result.best[i - 1].score - 1e-12);
+        REQUIRE(result.best[i].score >= result.best[i - 1].score - 1e-9);   // the rank quantum
 
     // Accepted and rejected are disjoint populations, and together they account for the work.
     for (const OrientCandidate &c : result.rejected)

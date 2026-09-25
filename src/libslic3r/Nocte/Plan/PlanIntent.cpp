@@ -88,7 +88,7 @@ std::string intent_name_list()
     return out;
 }
 
-// The CLI option keys, as PrintConfig.cpp declares them (PrintConfig.cpp:12182, 12191, 12199).
+// The CLI option keys, as PrintConfig.cpp declares them (PrintConfig.cpp:12182, 12191, 12202).
 // Underscored here and hyphenated on the command line: --nocte-load-dir arrives as nocte_load_dir.
 // The messages below name the hyphenated form, because that is what the user typed.
 const char *const OPT_INTENT   = "nocte_intent";
@@ -108,7 +108,7 @@ std::string option_string(const DynamicPrintConfig &config, const char *key)
 // "x,y,z" to a unit vector.
 //
 // The accepted form and the diagnostic are deliberately identical to --ground-face-normal's
-// (OrcaSlicer.cpp:4957): three numbers, commas, nothing else, all of it consumed. A user who has
+// (OrcaSlicer.cpp:5007-5008): three numbers, commas, nothing else, all of it consumed. A user who has
 // learnt one of these options has learnt all of them, and a second syntax for the same thing is a
 // second thing to get wrong.
 //

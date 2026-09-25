@@ -11998,7 +11998,7 @@ CLIActionsConfigDef::CLIActionsConfigDef()
     //
     // The accompanying --nocte-intent, --nocte-load-dir and --nocte-showcase options are NOT
     // declared here but in CLIMiscConfigDef: every key in this table becomes an action
-    // (OrcaSlicer.cpp:8025-8027), so a string option placed here would be treated as one.
+    // (OrcaSlicer.cpp:8065-8067), so a string option placed here would be treated as one.
     def = this->add("nocte_plan", coBool);
     def->label = L("NOCTE plan (JSON to stdout)");
     def->tooltip = L("Rank the build orientations of each loaded object and print the result as JSON to stdout, "
@@ -12178,7 +12178,7 @@ CLIMiscConfigDef::CLIMiscConfigDef()
 
 // NOCTE-BEGIN nocte-plan
     // Parameters of --nocte-plan (ADR-004). They live here rather than in CLIActionsConfigDef
-    // because every key in that table is collected as an action (OrcaSlicer.cpp:8025-8027).
+    // because every key in that table is collected as an action (OrcaSlicer.cpp:8065-8067).
     def = this->add("nocte_intent", coString);
     def->label = L("NOCTE part intent");
     def->tooltip = L("What the part is for, which selects the ranking weights and the hard constraints: "
@@ -12191,7 +12191,9 @@ CLIMiscConfigDef::CLIMiscConfigDef()
     def = this->add("nocte_load_dir", coString);
     def->label = L("NOCTE load direction");
     def->tooltip = L("Direction the part carries its load, in object coordinates, as \"x,y,z\". Required by "
-                     "--nocte-intent functional-strength and ignored otherwise. FDM parts fail at the interface "
+                     "--nocte-intent functional-strength. When given with another intent it still feeds that intent's "
+                     "strength weight (unspecified and functional-visual weigh strength; ornament and draft ignore it). "
+                     "FDM parts fail at the interface "
                      "between layers, so the engine looks for an orientation that lays this direction IN the layer "
                      "plane, rather than across the bonds between layers. On a 20x20x40 test box that is the "
                      "difference between surviving 20000 N and 10000 N.");

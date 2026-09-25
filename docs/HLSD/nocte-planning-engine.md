@@ -274,6 +274,12 @@ support, 0.02 mm of cusp, 60 s, 5 % of the best force, 0.1 of stability. It is w
 presenting a 0.3 % support difference as a decision. A z-score would be worse here — the candidate
 set is small, arbitrary and often bimodal.
 
+The floor is applied as a statement of equality, not only as a denominator: when
+`s_max − s_min < ε_k`, every candidate's `ŝ_k` is 0. Dividing by `max(range, ε_k)` alone would only
+shrink a sub-floor ordering — 1000 against 1200 mm³ of support would still come out 0 and 0.4 and
+still decide — which is the opposite of "we do not care". A term value that is not a finite number is
+not a measurement and takes `ŝ_k = 1`, the worst value, never the best.
+
 Hard constraints are applied as a **filter before normalisation**, never as a large penalty: a
 penalty distorts the min–max range of every other term.
 
@@ -290,7 +296,10 @@ because attributing them to the wrong layer is how they end up implemented nowhe
 
 - **Tie-breaking**, in a deterministic chain — less support, then less height, then less rotation
   from the current orientation, then lower index. The combination returns raw scores and applies no
-  ordering.
+  ordering. Each key is rounded to a whole number of a quantum before it is compared (score 1e-9,
+  support `ε_support`, height 1 µm, rotation 1e-4 rad), because a chain compared on raw doubles is
+  decided by round-off before it reaches the rule it states, and a tolerance compare is not a valid
+  sort order.
 - **Dropping candidates whose measurement flags are false.** A failed measurement leaves its term at
   zero, which is the best value on every term the combination inverts, so an unmeasured candidate
   would otherwise outrank every candidate measured honestly. The combination cannot filter this

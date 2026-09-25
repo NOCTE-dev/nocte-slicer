@@ -10,6 +10,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -911,7 +912,7 @@ TEST_CASE("nocte plan: an overhang needs a support column, sized by the density"
 {
     // 20 x 20 = 400 mm^2 of horizontal ceiling 10 mm above the bed, of which the 4 x 4 stem carries
     // 16 mm^2, so 384 mm^2 has nothing under it and is carried down the full 10 mm to the bed.
-    // Tier 1 is the top-down column carry documented at Scores.hpp:40-63, so
+    // Tier 1 is the top-down column carry documented at Scores.hpp:47-70, so
     //   solid column   = 384 mm^2 * 10 mm          = 3840 mm^3
     //   sparse at 0.15 = 0.15 * 3840               =  576 mm^3
     //
@@ -948,7 +949,7 @@ TEST_CASE("nocte plan: an overhang needs a support column, sized by the density"
 
 TEST_CASE("nocte plan: the part under the overhang carries its own support", "[NoctePlan]")
 {
-    // The `R = R \ S_k` step of the column carry (Scores.hpp:49) is what makes tier 1 self-support
+    // The `R = R \ S_k` step of the column carry (Scores.hpp:56) is what makes tier 1 self-support
     // aware, and NOTHING ELSE IN THIS FILE DEFENDS IT. On the 4 x 4 stem the stem removes 16 mm^2
     // of a 400 mm^2 ceiling, so dropping the subtraction moves 576 mm^3 to 600 mm^3 — both inside
     // the band over there, and the density and height ratios are pure multipliers that survive it
@@ -1037,7 +1038,7 @@ TEST_CASE("nocte plan: the overhang threshold filters the tier 1 support region"
     //   z_c  = R (1 - cos tc)      and projects to a disc of radius   r0 = R sin tc.
     // The sphere's own cross-section at height z has radius^2 = R^2 - (z - R)^2 = 2Rz - z^2, which
     // equals r0^2 exactly at z = z_c and SHRINKS below it, so the carried disc always lies outside
-    // S_k and is never subtracted away: the column carry (Scores.hpp:40-63) keeps the full annulus
+    // S_k and is never subtracted away: the column carry (Scores.hpp:47-70) keeps the full annulus
     // all the way down to the bed. Hence
     //   V = integral from 0 to z_c of pi * (r0^2 - (2Rz - z^2)) dz
     //     = pi * [ r0^2 * z_c - R * z_c^2 + z_c^3 / 3 ].
@@ -1261,7 +1262,9 @@ TEST_CASE("nocte plan: differences below the indifference floor do not decide", 
 
     // 1200 - 1000 = 200 mm^3, below the 500 mm^3 floor: these two are the same print.
     // Plain min-max normalisation would map them to 0 and 1 and separate them by the full 1.0,
-    // which is the bug. Under the floor the separation is at most 200 / 500 = 0.4.
+    // which is the bug. Dividing by max(200, 500) alone would still separate them by 200 / 500 =
+    // 0.4 and still decide the ranking; below the floor they are EQUAL on the term, so both
+    // normalise to 0 and the gap is exactly 0 (HLSD section 6).
     std::vector<OrientScores>          close;
     std::vector<std::array<double, 5>> close_terms;
     close.push_back(make_candidate(1000., 0.1, 600., 5000., 1.));
@@ -1270,8 +1273,9 @@ TEST_CASE("nocte plan: differences below the indifference floor do not decide", 
     REQUIRE(close_scores.size() == close.size());
     REQUIRE(close_terms.size() == close.size());
     const double close_gap = std::abs(close_scores[0] - close_scores[1]);
-    REQUIRE(close_gap <= 0.5);
-    REQUIRE(close_gap < 1.);
+    REQUIRE_THAT(close_gap, WithinAbs(0., 1e-12));
+    REQUIRE_THAT(close_terms[0][0], WithinAbs(0., 1e-12));
+    REQUIRE_THAT(close_terms[1][0], WithinAbs(0., 1e-12));
 
     // Field order is (support, cusp, time, strength, stability). Four of the five weights are 0, so
     // those columns are 0 in every row, and the support column stays inside [0, 1].
@@ -1301,6 +1305,47 @@ TEST_CASE("nocte plan: differences below the indifference floor do not decide", 
     // 0, and with the whole weight on support and the other four columns at 0, its score is 0 too.
     REQUIRE_THAT(apart_terms[0][0], WithinAbs(0., 1e-9));
     REQUIRE_THAT(apart_scores[0], WithinAbs(0., 1e-9));
+}
+
+TEST_CASE("nocte plan: a value that is not a number scores worst, not best", "[NoctePlan]")
+{
+    // The whole preference on support, so each score IS the normalised support term.
+    const ScoreWeights  weights = support_only_weights();
+    const ScoreEpsilons eps;
+    const double        nan     = std::numeric_limits<double>::quiet_NaN();
+
+    SECTION("against one measured candidate") {
+        // The range is taken over the finite values only: lo = hi = 1000, a spread of 0 below the
+        // 500 mm^3 floor, so the measured candidate is 0. The NaN is not a measurement and takes 1.
+        // A clamp spelled min(1, max(0, NaN)) would have made it 0 — the best — and it would have
+        // tied the one candidate we did measure.
+        std::vector<OrientScores> candidates;
+        candidates.push_back(make_candidate(1000., 0.1, 600., 5000., 1.));
+        candidates.push_back(make_candidate(nan, 0.1, 600., 5000., 1.));
+        std::vector<std::array<double, 5>> terms;
+        const std::vector<double> scores = combine(candidates, weights, eps, &terms);
+        REQUIRE(scores.size() == static_cast<size_t>(2));
+        REQUIRE(terms.size() == static_cast<size_t>(2));
+        REQUIRE_THAT(terms[0][0], WithinAbs(0., 1e-12));
+        REQUIRE_THAT(terms[1][0], WithinAbs(1., 1e-12));
+        REQUIRE_THAT(scores[0], WithinAbs(0., 1e-12));
+        REQUIRE_THAT(scores[1], WithinAbs(1., 1e-12));
+    }
+
+    SECTION("and it does not disturb the range of the others") {
+        // 1000 and 3000 span 2000 mm^3, past the floor: (1000 - 1000) / 2000 = 0 and
+        // (3000 - 1000) / 2000 = 1. The NaN is left out of lo and hi, so those two are exactly what
+        // they would be without it, and it scores 1 on its own account.
+        std::vector<OrientScores> candidates;
+        candidates.push_back(make_candidate(1000., 0.1, 600., 5000., 1.));
+        candidates.push_back(make_candidate(3000., 0.1, 600., 5000., 1.));
+        candidates.push_back(make_candidate(nan, 0.1, 600., 5000., 1.));
+        const std::vector<double> scores = combine(candidates, weights, eps, nullptr);
+        REQUIRE(scores.size() == static_cast<size_t>(3));
+        REQUIRE_THAT(scores[0], WithinAbs(0., 1e-12));
+        REQUIRE_THAT(scores[1], WithinAbs(1., 1e-12));
+        REQUIRE_THAT(scores[2], WithinAbs(1., 1e-12));
+    }
 }
 
 TEST_CASE("nocte plan: a single candidate scores without dividing by a zero range", "[NoctePlan]")
@@ -1452,7 +1497,7 @@ TEST_CASE("nocte plan: lower is better and a dominating candidate wins", "[Nocte
     //   time      5000 - 100   = 4900 s     > 60 s
     //   strength  20000 - 1000 = 19000 N    > 0.05 * 20000 = 1000 N
     //   stability 2.0 - 0.2    = 1.8        > 0.1
-    // Scores.hpp:200-203 names TWO more-is-better terms that are inverted inside, failure_force_n
+    // Scores.hpp:308-311 names TWO more-is-better terms that are inverted inside, failure_force_n
     // and stability, so candidate 0's higher force AND its higher tipping ratio both have to push
     // its score DOWN. An engine that forgot to invert stability would prefer the tippy candidate.
     std::vector<OrientScores> candidates;

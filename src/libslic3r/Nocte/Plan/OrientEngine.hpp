@@ -41,6 +41,11 @@ enum class RejectReason : uint8_t {
     TierCannotAnswer,   // the support tier cannot compute what this intent needs; see below
 };
 
+// One slot per enumerator of RejectReason, None included, so a tally can be indexed by the value.
+// It is spelled out rather than derived, because C++ offers no count of an enumeration's members;
+// any enumerator added above has to be added to this number and to reject_reason_name() together.
+constexpr size_t REJECT_REASON_COUNT = 8;
+
 const char *reject_reason_name(RejectReason reason);
 
 // Where a candidate rotation came from. Reported so a user can tell "this is how it already sits"
@@ -57,6 +62,11 @@ enum class CandidateSource : uint8_t {
 // face", and it is what makes the never-flip-for-no-gain rule visible in the result rather than only
 // true of the transform. A part that arrives resting on a hull facet — which is most parts — would
 // otherwise report every orientation as something to change.
+//
+// Only an EXACT reproduction merges into `Current`, never one inside `angular_merge_deg`. The
+// current candidate keeps the identity rotation, so a hull face a few degrees off the bed absorbed
+// into it would never be laid down at all: a plate imported 3 degrees tilted would be offered only
+// as it sits, resting on an edge.
 
 const char *candidate_source_name(CandidateSource source);
 
@@ -134,6 +144,13 @@ struct OrientResult
     bool          degenerate      = false;
     RejectReason  blocking_reason = RejectReason::None;
 
+    // How many entries of `rejected` carry each reason, indexed by the enumerator's value; slot 0
+    // (None) is always 0. `blocking_reason` is the largest slot, and that is a summary rather than a
+    // diagnosis: when two constraints conflict — a face that can only point up by standing the part
+    // on an edge — every candidate fails ONE of them, the larger half names itself, and only the
+    // full tally shows that the other constraint emptied the rest of the set.
+    std::array<size_t, REJECT_REASON_COUNT> rejection_counts{};
+
     // False when the engine could not run at all (an unusable mesh, or cancellation). A caller must
     // check this before reading anything else.
     bool ok = false;
@@ -142,9 +159,10 @@ struct OrientResult
     bool cancelled = false;
 };
 
-// Cancellation predicate: return true to abort. Consulted between candidates AND inside the scoring
-// loop, unlike Orient.cpp's `stopcond_`, which is accepted as a parameter and never read
-// (Orient.cpp:84) — a long plan there cannot be stopped at all.
+// Cancellation predicate: return true to abort. Consulted once before any work, once before each
+// batch of up to 16 candidates is scored, and once more before ranking — so a run whose candidates
+// fit in one batch consults it exactly three times. That is unlike Orient.cpp's `stopcond_`, which is
+// accepted as a parameter and never read (Orient.cpp:84) — a long plan there cannot be stopped at all.
 //
 // An EMPTY std::function throws std::bad_function_call when invoked, which would drive straight
 // through this header's promise never to throw on user geometry. The implementation must therefore
@@ -168,7 +186,9 @@ using CancelFn = std::function<bool()>;
 //   4. normalise and weight the survivors;
 //   5. break ties deterministically: less support, then lower height, then the smaller rotation
 //      away from the current orientation, then the lower candidate index. A part is never flipped
-//      for no gain.
+//      for no gain. Every key is quantised before it is compared (score to 1e-9, support to the
+//      support indifference floor, height to a micrometre, rotation to 1e-4 rad), so that two
+//      candidates which differ only by floating round-off are equal and the next key decides.
 //
 // Never throws on user geometry: an unusable mesh yields `ok == false`.
 OrientResult plan_orientation(const indexed_triangle_set &its,

@@ -325,7 +325,9 @@ struct ScoreEpsilons
 // the field order (support, cusp, time, strength, stability), for the panel to show why. Each entry
 // is in [0, 1] with 0 the best candidate on that term, already inverted where more is better, so a
 // panel can render the row directly as a bar without knowing the sign of the underlying quantity.
-// A term whose weight is zero contributes 0 to every row.
+// A term whose weight is zero contributes 0 to every row. So does a term whose spread across the set
+// is below its indifference floor in `eps`: the candidates are then EQUAL on it, not ordered by a
+// shrunken difference. A non-finite value is not a measurement and scores 1, the worst, on its term.
 std::vector<double> combine(const std::vector<OrientScores> &candidates,
                             const ScoreWeights              &weights,
                             const ScoreEpsilons             &eps,
